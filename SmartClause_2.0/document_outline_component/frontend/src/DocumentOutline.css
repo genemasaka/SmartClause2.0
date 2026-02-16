@@ -1,0 +1,76 @@
+/* Base styles for the component's iframe */
+body, #root {
+    background-color: transparent;
+    font-family: var(--font);
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    /* Hide scrollbars on the iframe body */
+    overflow: hidden; 
+}
+
+/* Main container - acts as the component's frame */
+.outline-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    border: 1px solid var(--border, #252930);
+    border-radius: var(--radius, 12px);
+    background: var(--panel, #1A1D24);
+}
+
+.outline-header {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text, #FFFFFF);
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border, #252930);
+    flex-shrink: 0;
+}
+
+/* Scrollable list area */
+.outline-list {
+    flex-grow: 1; 
+    overflow-y: auto; /* This is the key to scrolling */
+    padding-right: 4px;
+}
+
+/* List item style */
+.outline-item {
+    font-size: 14px;
+    padding: 6px 8px;
+    margin-bottom: 2px;
+    cursor: pointer;
+    border-radius: var(--radius-sm, 6px);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    color: var(--text-muted, #9BA1B0); 
+    line-height: 1.4;
+}
+
+/* Hover effect */
+.outline-item:hover {
+    background: rgba(75, 158, 255, 0.1); 
+    color: var(--accent, #4B9EFF);
+}
+
+/* Level specific styling for boldness */
+.outline-item.level-1 {
+    font-weight: 600;
+    color: var(--text, #FFFFFF);
+    margin-top: 10px;
+}
+
+/* Empty state message */
+.empty-state {
+    padding: 10px;
+    text-align: center;
+    font-style: italic;
+    color: var(--text-dim, #6B7280);
+    font-size: 14px;
+}

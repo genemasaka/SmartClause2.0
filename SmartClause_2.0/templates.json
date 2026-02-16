@@ -1,0 +1,621 @@
+{
+  "meta": {
+    "library": "SmartClause Templates",
+    "jurisdiction": "KE",
+    "version": "1.0.0",
+    "generated_at": "2025-10-21T07:08:35Z"
+  },
+  "templates": [
+    {
+      "id": "nda_mutual_v1",
+      "name": "Non-Disclosure Agreement (Mutual)",
+      "category": "agreement",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Mutual NDA under Kenyan law.",
+      "placeholders": {
+        "effective_date": "18 October 2025",
+        "disclosing_party": "",
+        "disclosing_address": "",
+        "receiving_party": "",
+        "receiving_address": "",
+        "conf_term_months": "24",
+        "purpose": "[Purpose]",
+        "law": "Republic of Kenya",
+        "forum": "Nairobi, Kenya"
+      },
+      "sections": [
+        {
+          "title": "Parties",
+          "text": "This NDA is made effective on {{effective_date}} between {{disclosing_party}} of {{disclosing_address}} and {{receiving_party}} of {{receiving_address}}."
+        },
+        {
+          "title": "Definitions",
+          "text": "\"Confidential Information\" includes personal data as per the Data Protection Act, 2019."
+        },
+        {
+          "title": "Use",
+          "text": "Use solely for {{purpose}}; no reverse-engineering or unauthorised disclosure."
+        },
+        {
+          "title": "Exclusions",
+          "text": "Public domain; received lawfully; independently developed; required by law."
+        },
+        {
+          "title": "Data Protection",
+          "text": "Implement appropriate measures; notify breaches without undue delay."
+        },
+        {
+          "title": "Term",
+          "text": "Obligations last {{conf_term_months}} months from the Effective Date."
+        },
+        {
+          "title": "Law & Dispute",
+          "text": "{{law}} law; arbitration in {{forum}}."
+        }
+      ]
+    },
+    {
+      "id": "nda_one_way_v1",
+      "name": "Non-Disclosure Agreement (One-Way)",
+      "category": "agreement",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "One-way NDA under Kenyan law.",
+      "placeholders": {
+        "effective_date": "18 October 2025",
+        "disclosing_party": "",
+        "receiving_party": "",
+        "receiving_address": "",
+        "purpose": "[Purpose]",
+        "conf_term_months": "24",
+        "forum": "Nairobi, Kenya"
+      },
+      "sections": [
+        {
+          "title": "Parties",
+          "text": "One-Way NDA between {{disclosing_party}} and {{receiving_party}} of {{receiving_address}} effective {{effective_date}}."
+        },
+        {
+          "title": "Use & Confidentiality",
+          "text": "Receiving Party shall keep the information confidential and use it only for {{purpose}}."
+        },
+        {
+          "title": "Data Protection",
+          "text": "Compliance with the Data Protection Act, 2019 is mandatory."
+        },
+        {
+          "title": "Term & Remedies",
+          "text": "Obligations last {{conf_term_months}} months; equitable relief available."
+        },
+        {
+          "title": "Dispute",
+          "text": "Arbitration in {{forum}} under the Arbitration Act."
+        }
+      ]
+    },
+    {
+      "id": "sale_land_v1",
+      "name": "Sale Agreement (Land)",
+      "category": "property",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Sale of land under Kenyan law.",
+      "placeholders": {
+        "seller": "",
+        "buyer": "",
+        "property_lr": "[LR/Title]",
+        "purchase_price_kes": "",
+        "deposit_kes": "",
+        "completion_period_days": "90",
+        "possession_date": "",
+        "consents": "[LCB; spousal]",
+        "stamp_duty_party": "Buyer"
+      },
+      "sections": [
+        {
+          "title": "Sale & Price",
+          "text": "Seller sells and Buyer purchases {{property_lr}} for KES {{purchase_price_kes}}; deposit KES {{deposit_kes}} to Stakeholder Advocate."
+        },
+        {
+          "title": "Conditions",
+          "text": "Consents: {{consents}}; clearances; valid title."
+        },
+        {
+          "title": "Completion",
+          "text": "Completion within {{completion_period_days}} days; possession on {{possession_date}}."
+        },
+        {
+          "title": "Taxes",
+          "text": "Stamp duty borne by {{stamp_duty_party}}; each party bears own legal costs."
+        }
+      ]
+    },
+    {
+      "id": "sale_general_v1",
+      "name": "Sale Agreement (General Goods)",
+      "category": "commercial",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Chattel sale under Kenyan law.",
+      "placeholders": {
+        "seller": "",
+        "buyer": "",
+        "goods_description": "",
+        "price_kes": "",
+        "delivery_date": "",
+        "warranty": "[as-is/express]"
+      },
+      "sections": [
+        {
+          "title": "Sale",
+          "text": "Sale of {{goods_description}} for KES {{price_kes}}."
+        },
+        {
+          "title": "Delivery",
+          "text": "Delivery on {{delivery_date}}; title passes upon full payment; risk on delivery."
+        },
+        {
+          "title": "Warranties",
+          "text": "Sold {{warranty}} subject to mandatory laws."
+        }
+      ]
+    },
+    {
+      "id": "tenancy_residential_v1",
+      "name": "Tenancy Agreement (Residential)",
+      "category": "property",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Short-form tenancy.",
+      "placeholders": {
+        "landlord": "",
+        "tenant": "",
+        "premises_desc": "",
+        "rent_kes_month": "",
+        "deposit_kes": "",
+        "term_months": "12",
+        "utilities": "Tenant",
+        "termination_notice_days": "30"
+      },
+      "sections": [
+        {
+          "title": "Premises & Term",
+          "text": "Let of {{premises_desc}} for {{term_months}} months."
+        },
+        {
+          "title": "Rent & Deposit",
+          "text": "Rent KES {{rent_kes_month}}; deposit KES {{deposit_kes}} refundable."
+        },
+        {
+          "title": "Use & Maintenance",
+          "text": "Residential use; reasonable care; landlord maintains structure."
+        },
+        {
+          "title": "Termination",
+          "text": "{{termination_notice_days}} days' notice by either party."
+        }
+      ]
+    },
+    {
+      "id": "tenancy_commercial_controlled_v1",
+      "name": "Tenancy Agreement (Commercial - Controlled)",
+      "category": "property",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Controlled tenancy under Kenyan law.",
+      "placeholders": {
+        "landlord": "",
+        "tenant": "",
+        "premises_desc": "",
+        "rent_kes_month": "",
+        "service_charge_kes": "0",
+        "term_months": "12"
+      },
+      "sections": [
+        {
+          "title": "Controlled Tenancy",
+          "text": "This is a controlled tenancy under the Landlord & Tenant Act."
+        },
+        {
+          "title": "Rent & Service Charge",
+          "text": "Rent KES {{rent_kes_month}}; service charge KES {{service_charge_kes}}."
+        },
+        {
+          "title": "Tribunal",
+          "text": "Disputes subject to the Business Premises Rent Tribunal."
+        }
+      ]
+    },
+    {
+      "id": "property_management_v1",
+      "name": "Property Management Agreement",
+      "category": "commercial",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Owner-manager agreement.",
+      "placeholders": {
+        "owner": "",
+        "manager": "",
+        "premises_scope": "",
+        "management_fee_pct": "10",
+        "reporting_cycle": "monthly",
+        "authority_limits": "[KES threshold]"
+      },
+      "sections": [
+        {
+          "title": "Appointment",
+          "text": "Owner appoints Manager for {{premises_scope}}."
+        },
+        {
+          "title": "Fees",
+          "text": "Fee {{management_fee_pct}}% of collected rents; reporting {{reporting_cycle}}."
+        },
+        {
+          "title": "Authority",
+          "text": "Expenditure limits {{authority_limits}} without consent."
+        }
+      ]
+    },
+    {
+      "id": "lease_energy_v1",
+      "name": "Lease – Equipment/Energy",
+      "category": "lease",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Energy/equipment lease with SLA.",
+      "placeholders": {
+        "lessor": "",
+        "lessee": "",
+        "asset_desc": "",
+        "performance_sla": "[uptime %]",
+        "maintenance_party": "[Lessor/Lessee]",
+        "downtime_credits": "[credits]",
+        "term_months": "36",
+        "rent_kes": "",
+        "insurance": "[scope]"
+      },
+      "sections": [
+        {
+          "title": "Lease",
+          "text": "Lease of {{asset_desc}} for {{term_months}} months."
+        },
+        {
+          "title": "Rent",
+          "text": "Rent KES {{rent_kes}}; payment schedule as agreed."
+        },
+        {
+          "title": "SLA",
+          "text": "Performance {{performance_sla}}; downtime credits {{downtime_credits}}."
+        },
+        {
+          "title": "Maintenance/Insurance",
+          "text": "Maintenance by {{maintenance_party}}; insurance {{insurance}}."
+        }
+      ]
+    },
+    {
+      "id": "loan_agreement_v1",
+      "name": "Loan Agreement",
+      "category": "finance",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Kenyan loan agreement.",
+      "placeholders": {
+        "lender": "",
+        "borrower": "",
+        "facility_amount_kes": "",
+        "purpose": "",
+        "interest_rate_pct": "",
+        "repayment_schedule": ""
+      },
+      "sections": [
+        {
+          "title": "Facility",
+          "text": "Facility of KES {{facility_amount_kes}} for {{purpose}}."
+        },
+        {
+          "title": "Interest/Repayment",
+          "text": "Interest {{interest_rate_pct}}% p.a.; {{repayment_schedule}}."
+        },
+        {
+          "title": "Default",
+          "text": "Events of default and remedies including acceleration."
+        }
+      ]
+    },
+    {
+      "id": "employment_permanent_v1",
+      "name": "Employment Contract (Permanent)",
+      "category": "employment",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Employment Act compliant.",
+      "placeholders": {
+        "employer": "",
+        "employee": "",
+        "position_title": "",
+        "start_date": "",
+        "salary_kes": "",
+        "probation_months": "3",
+        "notice_period_days": "30"
+      },
+      "sections": [
+        {
+          "title": "Appointment",
+          "text": "Employee appointed as {{position_title}} from {{start_date}}."
+        },
+        {
+          "title": "Remuneration",
+          "text": "Salary KES {{salary_kes}}; statutory deductions apply."
+        },
+        {
+          "title": "Termination",
+          "text": "Notice {{notice_period_days}} days; summary dismissal per law."
+        }
+      ]
+    },
+    {
+      "id": "employment_contractor_v1",
+      "name": "Employment/Contractor Agreement",
+      "category": "employment",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Independent contractor terms.",
+      "placeholders": {
+        "company": "",
+        "contractor": "",
+        "services_scope": "",
+        "term_months": "6",
+        "fees_kes": "",
+        "payment_terms": "NET30"
+      },
+      "sections": [
+        {
+          "title": "Services",
+          "text": "Contractor to provide {{services_scope}} for {{term_months}} months."
+        },
+        {
+          "title": "Fees",
+          "text": "Fees KES {{fees_kes}}; {{payment_terms}}."
+        },
+        {
+          "title": "IP/Confidentiality",
+          "text": "IP vests in company; confidentiality survives."
+        }
+      ]
+    },
+    {
+      "id": "service_agreement_v1",
+      "name": "Service Agreement",
+      "category": "commercial",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Services agreement.",
+      "placeholders": {
+        "provider_name": "",
+        "client_name": "",
+        "services_scope": "",
+        "service_term_months": "12",
+        "fees_kes": "",
+        "payment_terms": "NET30"
+      },
+      "sections": [
+        {
+          "title": "Scope",
+          "text": "Provider to deliver {{services_scope}} for {{service_term_months}} months."
+        },
+        {
+          "title": "Fees",
+          "text": "Fees KES {{fees_kes}}; terms {{payment_terms}}."
+        },
+        {
+          "title": "Data Protection",
+          "text": "Comply with Data Protection Act 2019; add annex if processing personal data."
+        }
+      ]
+    },
+    {
+      "id": "lease_commercial_v1",
+      "name": "Lease (Commercial)",
+      "category": "lease",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Long-form registrable lease.",
+      "placeholders": {
+        "landlord": "",
+        "tenant": "",
+        "premises_desc": "",
+        "term_years": "5",
+        "rent_kes_month": "",
+        "service_charge_kes": "",
+        "deposit_kes": ""
+      },
+      "sections": [
+        {
+          "title": "Premises & Term",
+          "text": "Lease of {{premises_desc}} for {{term_years}} years."
+        },
+        {
+          "title": "Rent",
+          "text": "Rent KES {{rent_kes_month}} monthly; service charge KES {{service_charge_kes}}."
+        },
+        {
+          "title": "Registration",
+          "text": "Parties to attend to stamping and registration."
+        }
+      ]
+    },
+    {
+      "id": "poa_general_lra5_v1",
+      "name": "Power of Attorney (General - LRA-5)",
+      "category": "poa",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "General PoA in LRA-5 style.",
+      "placeholders": {
+        "donor_name": "",
+        "attorney_name": "",
+        "effective_date": "",
+        "special_instructions": ""
+      },
+      "sections": [
+        {
+          "title": "Grant",
+          "text": "I, {{donor_name}}, appoint {{attorney_name}} with general powers under the Land Registration Act."
+        },
+        {
+          "title": "Effect",
+          "text": "Effective {{effective_date}}; instructions: {{special_instructions}}."
+        }
+      ]
+    },
+    {
+      "id": "poa_specific_lra6_v1",
+      "name": "Power of Attorney (Specific - LRA-6)",
+      "category": "poa",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Specific PoA in LRA-6 style.",
+      "placeholders": {
+        "donor_name": "",
+        "attorney_name": "",
+        "scope": "",
+        "effective_date": "",
+        "expiry_date": ""
+      },
+      "sections": [
+        {
+          "title": "Appointment",
+          "text": "I, {{donor_name}}, appoint {{attorney_name}} with authority limited to {{scope}}."
+        },
+        {
+          "title": "Term",
+          "text": "From {{effective_date}} to {{expiry_date}} unless earlier revoked."
+        }
+      ]
+    },
+    {
+      "id": "will_standard_v1",
+      "name": "Last Will and Testament",
+      "category": "succession",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Kenyan will formalities.",
+      "placeholders": {
+        "testator_name": "",
+        "id_number": "",
+        "executor_name": "",
+        "beneficiaries": ""
+      },
+      "sections": [
+        {
+          "title": "Revocation",
+          "text": "I, {{testator_name}} (ID {{id_number}}), revoke all former wills."
+        },
+        {
+          "title": "Executor",
+          "text": "I appoint {{executor_name}} as executor."
+        },
+        {
+          "title": "Bequests",
+          "text": "{{beneficiaries}}."
+        },
+        {
+          "title": "Residuary",
+          "text": "I give the residue of my estate absolutely."
+        }
+      ]
+    },
+    {
+      "id": "affidavit_ntsa_v1",
+      "name": "Affidavit – NTSA/Vehicle",
+      "category": "affidavit",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Affidavit format under Cap. 15.",
+      "placeholders": {
+        "deponent_name": "",
+        "id_number": "",
+        "vehicle_reg": "",
+        "chassis": "",
+        "purpose": ""
+      },
+      "sections": [
+        {
+          "title": "Heading",
+          "text": "REPUBLIC OF KENYA\\nIN THE MATTER OF THE OATHS AND STATUTORY DECLARATIONS ACT (CAP. 15)\\nIN THE MATTER OF {{purpose}}\\nAFFIDAVIT"
+        },
+        {
+          "title": "Opening",
+          "text": "I, {{deponent_name}}, of ID {{id_number}}, make oath and state:"
+        },
+        {
+          "title": "Statements",
+          "text": "1. THAT I am the owner/user of vehicle {{vehicle_reg}} (chassis {{chassis}}).\\n2. THAT ..."
+        },
+        {
+          "title": "Jurat",
+          "text": "SWORN at [Town] this [Day] of [Month] [Year] BEFORE ME: Commissioner for Oaths/Advocate."
+        }
+      ]
+    },
+    {
+      "id": "affidavit_same_person_v1",
+      "name": "Affidavit – One-and-the-Same Person",
+      "category": "affidavit",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Name variation affidavit.",
+      "placeholders": {
+        "deponent_name": "",
+        "id_number": "",
+        "name_variants": "",
+        "context": ""
+      },
+      "sections": [
+        {
+          "title": "Heading",
+          "text": "REPUBLIC OF KENYA\\nIN THE MATTER OF THE OATHS AND STATUTORY DECLARATIONS ACT (CAP. 15)\\nAFFIDAVIT"
+        },
+        {
+          "title": "Statements",
+          "text": "THAT my name appears as {{name_variants}} in records relating to {{context}}; THAT I am one and the same person."
+        },
+        {
+          "title": "Jurat",
+          "text": "SWORN at [Town] this [Day] of [Month] [Year] BEFORE ME: Commissioner for Oaths/Advocate."
+        }
+      ]
+    },
+    {
+      "id": "affidavit_post_mortem_v1",
+      "name": "Affidavit – Post-Mortem",
+      "category": "affidavit",
+      "jurisdiction": "KE",
+      "version": "1.0",
+      "description": "Post-mortem affidavit.",
+      "placeholders": {
+        "deponent_name": "",
+        "id_number": "",
+        "deceased_name": "",
+        "relationship": "",
+        "purpose": ""
+      },
+      "sections": [
+        {
+          "title": "Heading",
+          "text": "REPUBLIC OF KENYA\\nIN THE MATTER OF THE OATHS AND STATUTORY DECLARATIONS ACT (CAP. 15)\\nIN THE MATTER OF {{deceased_name}}\\nAFFIDAVIT"
+        },
+        {
+          "title": "Statements",
+          "text": "THAT I am {{relationship}} of the deceased; THAT this affidavit is for {{purpose}}; THAT ..."
+        },
+        {
+          "title": "Jurat",
+          "text": "SWORN at [Town] this [Day] of [Month] [Year] BEFORE ME: Commissioner for Oaths/Advocate."
+        }
+      ]
+    }
+  ]
+}

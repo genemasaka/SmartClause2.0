@@ -1,0 +1,124 @@
+/* Base styles */
+body, #root {
+    background-color: var(--bg, #0A0B0D);
+    color: var(--text, #FFFFFF);
+    font-family: var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif);
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Prevents the whole iframe from scrolling */
+}
+
+/* Main container */
+.versions-panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 100%; /* ADD THIS */
+    padding: 12px;
+    border: 1px solid var(--border, #252930);
+    border-radius: var(--radius, 12px);
+    background: var(--panel, #1A1D24);
+}
+
+/* Header */
+.panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border, #252930);
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text, #FFFFFF);
+}
+
+/* THE SCROLLABLE AREA */
+.versions-list {
+    flex: 1; /* Changed from flex-grow: 1 */
+    min-height: 0; 
+    overflow-y: auto !important;
+    padding-right: 4px;
+}
+
+/* Individual item */
+.version-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    border-radius: var(--radius-sm, 8px);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.version-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border, #252930);
+}
+
+.version-item.selected {
+    background: rgba(75, 158, 255, 0.1);
+    border-color: var(--accent, #4B9EFF);
+}
+
+.version-item.active-current .version-label {
+    font-weight: 700;
+}
+
+.current-badge {
+    background: var(--success, #4ADE80);
+    color: var(--bg, #0A0B0D);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* Version details text */
+.version-details {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.version-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.version-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text, #FFFFFF);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.version-time {
+    font-size: 12px;
+    color: var(--text-dim, #6B7280);
+    flex-shrink: 0;
+}
+
+.version-summary {
+    font-size: 13px;
+    color: var(--text-muted, #9BA1B0);
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--text-muted, #9BA1B0);
+    font-style: italic;
+}
