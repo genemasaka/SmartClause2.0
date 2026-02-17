@@ -196,9 +196,132 @@ view = get_view()
 # SIDEBAR
 # ============================================================================
 with st.sidebar:
+    # Robust sidebar styling with absolute positioned footer
+    st.markdown("""
+    <style>
+    /* Force sidebar to use relative positioning for absolute footer */
+    [data-testid="stSidebar"] {
+        position: relative;
+    }
+    
+    /* Ensure sidebar content is scrollable with space for footer */
+    section[data-testid="stSidebar"] > div {
+        padding-bottom: 80px !important; /* Space for fixed footer */
+    }
+    
+    /* Sidebar footer - absolutely positioned at bottom */
+    .sidebar-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 250px; /* Streamlit sidebar default width */
+        padding: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: #1E1E1E; /* Match sidebar background */
+        z-index: 999;
+        box-sizing: border-box;
+    }
+    
+    /* Adjust for expanded sidebar */
+    [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
+        width: 250px;
+    }
+    
+    .sidebar-footer-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .sidebar-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #4B9EFF, #2D7DD2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    
+    .sidebar-user-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .sidebar-user-email {
+        color: #FFFFFF;
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    
+    /* Modern navigation with pill-shaped active state */
+    .modern-nav {
+        padding: 8px 12px;
+    }
+    
+    .modern-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        margin: 4px 0;
+        border-radius: 10px;
+        color: #FFFFFF;
+        text-decoration: none !important;
+        font-size: 14px;
+        font-weight: 400;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    
+    .modern-nav-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+        text-decoration: none !important;
+    }
+    
+    .modern-nav-item.active {
+        background: #4B9EFF;
+        color: #FFFFFF;
+        font-weight: 500;
+        text-decoration: none !important;
+    }
+    
+    .tier-tag {
+        display: inline-block;
+        margin-left: auto;
+        padding: 2px 8px;
+        background: rgba(74, 222, 128, 0.15);
+        color: #4ADE80;
+        font-size: 10px;
+        font-weight: 600;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+    
+    /* Slimmer buttons */
+    [data-testid="stSidebar"] button[kind="primary"],
+    [data-testid="stSidebar"] button[kind="secondary"],
+    [data-testid="stSidebar"] .stButton > button {
+        min-height: 32px !important;
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 
-    # Sidebar Logo
+    
+    # Logo
     try:
         import base64
         import os
@@ -208,8 +331,8 @@ with st.sidebar:
                 data = base64.b64encode(f.read()).decode("utf-8")
             st.markdown(
                 f"""
-                <div style="display: flex; justify-content: center; margin-bottom: 20px; margin-top: 10px;">
-                    <img src="data:image/png;base64,{data}" style="width: 70%; height: auto; border: none; background: transparent;">
+                <div style="display: flex; justify-content: center; margin: 12px 0;">
+                    <img src="data:image/png;base64,{data}" style="width: 80%; height: auto; border: none; background: transparent;">
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -217,68 +340,25 @@ with st.sidebar:
     except Exception:
         pass
 
-    # User info
-    user_email = st.session_state.get("user_email", "Unknown User")
-    st.markdown(f"""
-<div style="padding: 8px 12px; background: rgba(75, 158, 255, 0.1); border-radius: 6px; margin: 12px 16px;">
-    <div style="color: #9BA1B0; font-size: 11px;">Logged in as:</div>
-    <div style="color: #FFFFFF; font-size: 13px; font-weight: 500;">{user_email}</div>
-</div>
-""", unsafe_allow_html=True)
-
-    # Subscription Status
-    user_id = st.session_state.get("user_id")
-    if user_id:
-        status = subscription_mgr.get_user_status(user_id)
-        tier = status.get("tier", "single_credit")
-        credits = status.get("credits", 0)
-        is_active = status.get("is_active", False)
-        
-        tier_names = {
-            "single_credit": "Single Credit",
-            "pay_as_you_go": "Pay-As-You-Go",
-            "standard": "Standard"
-        }
-        tier_display = tier_names.get(tier, tier)
-        
-        # Color based on tier
-        tier_colors = {
-            "single_credit": "#4ADE80",
-            "pay_as_you_go": "#F59E0B",
-            "standard": "#4B9EFF"
-        }
-        tier_color = tier_colors.get(tier, "#9BA1B0")
-        
-        # Credit display
-        if tier in ["single_credit", "pay_as_you_go"]:
-            credit_text = f"{credits} credit{'s' if credits != 1 else ''} remaining"
-            credit_color = "#4ADE80" if credits > 0 else "#FF6B6B"
-        else:
-            credit_text = "Unlimited"
-            credit_color = "#4ADE80"
-        
-        st.markdown(f"""
-<div style="padding: 8px 12px; background: #1A1D24; border: 1px solid #252930; border-radius: 6px; margin: 12px 16px;">
-    <div style="color: {tier_color}; font-size: 13px; font-weight: 600; margin-bottom: 2px;">{tier_display}</div>
-    <div style="color: {credit_color}; font-size: 11px;">{credit_text}</div>
-</div>
-""", unsafe_allow_html=True)
-
     # New Matter Button
     if st.button("New Matter", key="sidebar_new_matter", use_container_width=True, type="primary"):
         st.session_state["show_new_matter"] = True
-        st.session_state["show_search_modal"] = False  # Clear conflict
-        st.session_state["show_edit_matter"] = False   # Clear conflict
+        st.session_state["show_search_modal"] = False
+        st.session_state["show_edit_matter"] = False
         st.session_state["modal_mode"] = "new_matter"
         st.session_state["existing_matter_id"] = None
         st.rerun()
 
-    # Interactive Search Box
-    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+
+    # Search Button (Modal-based)
+    st.markdown('<div style="margin: 0 16px 16px 16px;">', unsafe_allow_html=True)
     
     # Initialize search modal state
     if "show_search_modal" not in st.session_state:
         st.session_state["show_search_modal"] = False
+    
+    # Get current view for search context
+    view = get_view()
     
     # Search button that opens modal
     if st.button(
@@ -288,11 +368,11 @@ with st.sidebar:
         type="secondary"
     ):
         st.session_state["show_search_modal"] = True
-        st.session_state["show_new_matter"] = False    # Clear conflict
-        st.session_state["show_edit_matter"] = False   # Clear conflict
+        st.session_state["show_new_matter"] = False
+        st.session_state["show_edit_matter"] = False
         st.rerun()
     
-    st.markdown('<div style="margin-bottom: 16px;"></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Get session param helper
     def get_session_param():
@@ -304,36 +384,64 @@ with st.sidebar:
 
     session_param = get_session_param()
     
-    # Navigation
-    def nav_item(label, icon_svg, href_view, is_active):
-        active_cls = " sc-nav-active" if is_active else ""
-        return f"""
-<a class="sc-nav-item{active_cls}" href="?view={href_view}{session_param}" target="_self">
-  <svg class="sc-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">{icon_svg}</svg>
-  <span>{label}</span>
-</a>"""
-
-    matters_icon = """<rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
-                      <path d="M8 7h8M8 11h8M8 15h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>"""
-    library_icon = """<path d="M6 20V7a2 2 0 0 1 2-2h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                      <rect x="6" y="7" width="12" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/>
-                      <path d="M10 10h6M10 13h6M10 16h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>"""
-    pricing_icon = """<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
-                      <path d="M12 6v12M9 9h3.5a2 2 0 0 1 0 4H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>"""
-    org_icon = """<path d="M3 21h18M5 21V7l8-4 8 4v14M8 10a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>"""
-
-    st.markdown(f"""
-<nav class="sc-nav">
-  {nav_item("Matters", matters_icon, "matters", view == "matters" or view == "matter_details")}
-  {nav_item("Clause Library", library_icon, "clause_library", view == "clause_library")}
-  {nav_item("Organization", org_icon, "organization", view == "organization")}
-  {nav_item("Pricing", pricing_icon, "pricing", view == "pricing")}
-</nav>
-""", unsafe_allow_html=True)
+    # Get subscription info for tier tag
+    user_id = st.session_state.get("user_id")
+    tier_display = ""
+    if user_id:
+        status = subscription_mgr.get_user_status(user_id)
+        tier = status.get("tier", "trial")
+        documents_remaining = status.get("documents_remaining")
+        
+        # Determine tier display
+        if tier == "enterprise":
+            tier_display = '<span class="tier-tag">Unlimited</span>'
+        elif tier == "team":
+            tier_display = '<span class="tier-tag">Team</span>'
+        elif tier == "individual":
+            tier_display = f'<span class="tier-tag">{documents_remaining or 0} docs</span>'
+        elif tier == "trial":
+            tier_display = '<span class="tier-tag" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">Trial</span>'
     
-    # Logout button - Use form to prevent rerun issues
-    if st.button("Logout", use_container_width=True, key="logout_btn"):
+    # Modern Navigation (no icons, plain white text)
+    st.markdown(f"""
+    <div class="modern-nav">
+        <a class="modern-nav-item {'active' if view in ['matters', 'matter_details'] else ''}" href="?view=matters{session_param}" target="_self">
+            <span>Matters</span>
+        </a>
+        <a class="modern-nav-item {'active' if view == 'clause_library' else ''}" href="?view=clause_library{session_param}" target="_self">
+            <span>Clause Library</span>
+        </a>
+        <a class="modern-nav-item {'active' if view == 'organization' else ''}" href="?view=organization{session_param}" target="_self">
+            <span>Organization</span>
+            {tier_display}
+        </a>
+        <a class="modern-nav-item {'active' if view == 'pricing' else ''}" href="?view=pricing{session_param}" target="_self">
+            <span>Pricing</span>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Logout button (will be above footer)
+    if st.button("Logout", key="logout_btn", use_container_width=True):
         logout()
+    
+    # Pinned Footer (no help icon, outside scrollable content)
+    user_email = st.session_state.get("user_email", "User")
+    user_initials = "".join([word[0].upper() for word in user_email.split("@")[0].split(".")[:2]])
+    
+    st.markdown(f"""
+    <div class="sidebar-footer">
+        <div class="sidebar-footer-content">
+            <div class="sidebar-avatar">{user_initials}</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-email">{user_email}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+
 
 # ============================================================================
 # MATTERS PAGE
@@ -507,10 +615,10 @@ def render_matters():
             <div class="sc-card-client">{m["client_name"]}</div>
             <div class="sc-card-meta">
             <span>{m.get("matter_type", "General")}</span>
-            <span class="sc-meta-dot">•</span>
+            <span class="sc-meta-dot">&bull;</span>
             <span>{m["jurisdiction"]}</span>
-            <span class="sc-meta-dot">•</span>
-            <span>{draft_count} draft{"s" if draft_count != 1 else ""}</span>
+            <span class="sc-meta-dot">&bull;</span>
+            <span>{draft_count} draft{'s' if draft_count != 1 else ''}</span>
             </div>
         </div>
         </div>
@@ -559,7 +667,7 @@ def render_matters():
                     st.rerun()
 
 def get_time_ago(dt):
-    """Helper to show relative time."""
+    """Helper to show relative time"""
     from datetime import datetime
     now = datetime.now(dt.tzinfo)
     diff = now - dt

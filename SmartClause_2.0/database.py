@@ -1926,6 +1926,164 @@ class DatabaseManager:
             logger.error(f"Error deleting case note: {e}")
             return False
 
+    # =========================================================================
+    # AI CHAT OPERATIONS
+    # =========================================================================
+    
+    def create_chat_message(
+        self,
+        version_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a new chat message.
+        
+        Args:
+            version_id: Document version ID
+            session_id: Chat session ID
+            role: Message role ('user', 'assistant', 'system')
+            content: Message content
+            metadata: Optional metadata (e.g., model used, edit suggestions)
+        """
+        try:
+            data = {
+                "version_id": version_id,
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "metadata": metadata or {},
+                "user_id": self.user_id
+            }
+            
+            result = self.client.table("chat_messages").insert(data).execute()
+            
+            logger.info(f"Created chat message for version {version_id}, role: {role}")
+            return result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error creating chat message: {e}")
+            raise
+    
+    def get_chat_history(
+        self,
+        version_id: str,
+        session_id: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get chat history for a document version.
+        
+        Args:
+            version_id: Document version ID
+            session_id: Optional session ID to filter by
+            limit: Maximum number of messages to return
+        """
+        try:
+            query = self.client.table("chat_messages").select("*").eq("version_id", version_id)
+            
+            if session_id:
+                query = query.eq("session_id", session_id)
+            
+            query = query.order("created_at", desc=False).limit(limit)
+            
+            result = query.execute()
+            return result.data
+            
+        except Exception as e:
+            logger.error(f"Error getting chat history: {e}")
+            return []
+    
+    def get_chat_sessions(self, document_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all chat sessions for a document.
+        
+        Args:
+            document_id: Document ID
+            
+        Returns:
+            List of unique session IDs with metadata
+        """
+        try:
+            # Get all versions for this document
+            versions = self.get_versions(document_id, include_content=False)
+            version_ids = [v['id'] for v in versions]
+            
+            if not version_ids:
+                return []
+            
+            # Get distinct sessions across all versions
+            result = self.client.table("chat_messages")\
+                .select("session_id, created_at, version_id")\
+                .in_("version_id", version_ids)\
+                .order("created_at", desc=True)\
+                .execute()
+            
+            # Group by session_id
+            sessions = {}
+            for msg in result.data:
+                sid = msg['session_id']
+                if sid not in sessions:
+                    sessions[sid] = {
+                        'session_id': sid,
+                        'started_at': msg['created_at'],
+                        'version_id': msg['version_id']
+                    }
+            
+            return list(sessions.values())
+            
+        except Exception as e:
+            logger.error(f"Error getting chat sessions: {e}")
+            return []
+    
+    def delete_chat_session(self, session_id: str) -> bool:
+        """
+        Delete all messages in a chat session.
+        
+        Args:
+            session_id: Session ID to delete
+        """
+        try:
+            self.client.table("chat_messages").delete()\
+                .eq("session_id", session_id)\
+                .eq("user_id", self.user_id)\
+                .execute()
+            
+            logger.info(f"Deleted chat session: {session_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting chat session: {e}")
+            return False
+    
+    def get_latest_chat_session(self, version_id: str) -> Optional[str]:
+        """
+        Get the most recent chat session ID for a version.
+        
+        Args:
+            version_id: Document version ID
+            
+        Returns:
+            Latest session ID or None
+        """
+        try:
+            result = self.client.table("chat_messages")\
+                .select("session_id")\
+                .eq("version_id", version_id)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if result.data:
+                return result.data[0]['session_id']
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting latest chat session: {e}")
+            return None
+
 
 # =============================================================================
 # HELPER FUNCTIONS FOR RPC CALLS (Add these to Supabase)

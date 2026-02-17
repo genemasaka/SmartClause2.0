@@ -3,7 +3,7 @@ import json
 import time
 import re
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Generator, Tuple
 from datetime import datetime
 from document_generator import DocumentGenerator
 from bs4 import BeautifulSoup, Tag, NavigableString
@@ -20,6 +20,26 @@ logger = logging.getLogger(__name__)
 
 # Autosave interval
 AUTOSAVE_INTERVAL_SECONDS = 30
+
+def get_document_id() -> Optional[str]:
+    """Retrieves the current document ID from URL or session state."""
+    # 1. Check URL parameters (highest priority)
+    try:
+        doc_id = st.query_params.get("document_id")
+        if doc_id:
+            return str(doc_id)
+    except Exception:
+        pass
+        
+    # 2. Check current session
+    if "current_document_id" in st.session_state and st.session_state.current_document_id:
+        return str(st.session_state.current_document_id)
+    
+    # 3. Check preserved ID (fallback)
+    if "preserved_document_id" in st.session_state and st.session_state.preserved_document_id:
+        return str(st.session_state.preserved_document_id)
+        
+    return None
 
 def _render_loading_animation():
     """Render a clean loading spinner for the document editor."""
@@ -903,7 +923,149 @@ def _render_editor_fragment(db: DatabaseManager, document_id: str, clauses_data:
                 print(f"💾 Triggering background autosave for {len(result)} chars")
                 _handle_progressive_save(db, document_id, result)
 
-def get_document_id() -> Optional[str]:
+
+# ============================================================================
+# AI CHAT HANDLERS
+# ============================================================================
+
+def _handle_chat_message(
+    db: DatabaseManager,
+    version_id: str,
+    document_id: str,
+    session_id: str,
+    message: str,
+    document_content: str,
+    document_metadata: Dict[str, Any],
+    matter_metadata: Dict[str, Any]
+) -> Generator[str, None, None]:
+    """
+    Handle AI chat message and stream response.
+    
+    Args:
+        db: Database manager
+        version_id: Current document version ID
+        document_id: Document ID
+        session_id: Chat session ID
+        message: User's message
+        document_content: Current document HTML content
+        document_metadata: Document metadata
+        matter_metadata: Matter metadata
+        
+    Yields:
+        Response chunks from AI
+    """
+    try:
+        from ai_chat_service import AIChatService
+        
+        # Initialize chat service
+        chat_service = AIChatService()
+        
+        # Save user message to database
+        db.create_chat_message(
+            version_id=version_id,
+            session_id=session_id,
+            role='user',
+            content=message
+        )
+        
+        # Get conversation history
+        chat_history = db.get_chat_history(version_id, session_id, limit=10)
+        formatted_history = chat_service.format_conversation_history(chat_history)
+        
+        # Extract document context
+        document_context = chat_service.extract_document_context(
+            document=document_metadata,
+            matter=matter_metadata,
+            current_content=document_content
+        )
+        
+        # Stream AI response
+        full_response = ""
+        for chunk in chat_service.stream_chat_response(
+            user_message=message,
+            document_context=document_context,
+            conversation_history=formatted_history
+        ):
+            full_response += chunk
+            yield chunk
+        
+        # Parse any edit suggestions
+        edits = chat_service.parse_edit_suggestions(full_response)
+        
+        # Save AI response to database
+        db.create_chat_message(
+            version_id=version_id,
+            session_id=session_id,
+            role='assistant',
+            content=full_response,
+            metadata={'edits': edits} if edits else None
+        )
+        
+        logger.info(f"Chat message processed with {len(edits)} edit suggestions")
+        
+    except Exception as e:
+        logger.error(f"Error handling chat message: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        yield f"\n\n[Error: {str(e)}]"
+
+
+def _apply_chat_edit(
+    db: DatabaseManager,
+    document_id: str,
+    version_id: str,
+    edit: Dict[str, str],
+    current_content: str
+) -> Tuple[str, bool]:
+    """
+    Apply an edit suggestion from AI chat.
+    
+    Args:
+        db: Database manager
+        document_id: Document ID
+        version_id: Current version ID
+        edit: Edit specification
+        current_content: Current document content
+        
+    Returns:
+        Tuple of (modified_content, success)
+    """
+    try:
+        from ai_chat_service import AIChatService
+        
+        chat_service = AIChatService()
+        modified_content, success = chat_service.apply_edit_to_content(
+            content=current_content,
+            edit=edit
+        )
+        
+        if success:
+            # Update the version content
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(modified_content, 'html.parser')
+            content_plain = soup.get_text()
+            
+            db.update_version_content(
+                version_id=version_id,
+                content=modified_content,
+                content_plain=content_plain
+            )
+            
+            logger.info(f"Successfully applied chat edit to version {version_id}")
+            return modified_content, True
+        else:
+            logger.warning("Failed to apply chat edit")
+            return current_content, False
+            
+    except Exception as e:
+        logger.error(f"Error applying chat edit: {e}")
+        return current_content, False
+
+
+# ============================================================================
+# MAIN RENDER FUNCTION (continued)
+# ============================================================================
+
     """
     Robust document ID retrieval with multiple fallback strategies.
     Priority order:
@@ -949,6 +1111,240 @@ def get_document_id() -> Optional[str]:
     
     logger.error("❌ No document ID found in any storage location")
     return None
+
+# ============================================================================
+# AI CHAT PANEL RENDER FUNCTION
+# ============================================================================
+
+@st.fragment
+def _render_chat_panel(
+    db: DatabaseManager,
+    document: Dict[str, Any],
+    matter: Dict[str, Any],
+    version_id: str,
+    document_content: str
+):
+    """Render the AI chat panel."""
+    import uuid
+    
+    # Initialize chat session
+    if "chat_session_id" not in st.session_state:
+        # Try to get latest session or create new one
+        latest_session = db.get_latest_chat_session(version_id)
+        st.session_state.chat_session_id = latest_session or str(uuid.uuid4())
+    
+    if "chat_messages" not in st.session_state:
+        # Load existing messages
+        st.session_state.chat_messages = db.get_chat_history(
+            version_id,
+            st.session_state.chat_session_id,
+            limit=50
+        )
+    
+    if "chat_is_streaming" not in st.session_state:
+        st.session_state.chat_is_streaming = False
+    
+    # Chat panel header
+    st.markdown("""
+    <div style="background: #252930; padding: 12px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #2D3139;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 14px; font-weight: 600; color: #FFFFFF;">ClauseBot</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Messages container
+    st.markdown("""
+    <style>
+    .chat-container {
+        background: #1A1D23;
+        border-radius: 0 0 8px 8px;
+        height: 500px;
+        overflow-y: auto;
+        padding: 12px;
+    }
+    .chat-message {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .chat-message.user {
+        background: #4A9EFF;
+        color: #FFFFFF;
+        margin-left: 20%;
+    }
+    .chat-message.assistant {
+        background: #252930;
+        color: #E8EAED;
+        border: 1px solid #2D3139;
+        margin-right: 20%;
+    }
+    .chat-role {
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        opacity: 0.8;
+    }
+    .quick-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+        margin: 12px 0;
+    }
+    /* Target Streamlit buttons inside the chat panel to make them smaller */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"] button {
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.8rem !important;
+        min-height: 0px !important;
+        height: auto !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Messages display
+    messages_placeholder = st.container()
+    with messages_placeholder:
+        if len(st.session_state.chat_messages) == 0:
+            st.markdown("""
+            <div style="text-align: center; padding: 40px 20px; color: #9BA1B0;">
+                <div style="font-size: 32px; margin-bottom: 12px;">👋</div>
+                <p style="font-size: 13px;">Hi! I'm your AI legal assistant.</p>
+                <p style="font-size: 12px; opacity: 0.8;">I can help you edit, analyze, and improve this document.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            for msg in st.session_state.chat_messages:
+                if msg['role'] != 'system':
+                    role_class = "user" if msg['role'] == "user" else "assistant"
+                    role_label = "You" if msg['role'] == "user" else "ClauseBot"
+                    
+                    st.markdown(f"""
+                    <div class="chat-message {role_class}">
+                        <div class="chat-role">{role_label}</div>
+                        <div>{msg['content']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        if st.session_state.chat_is_streaming:
+            st.markdown("""
+            <div style="padding: 12px; color: #4A9EFF;">
+                <em>AI is thinking...</em>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Quick actions
+    st.markdown("<div class='quick-actions-grid'>", unsafe_allow_html=True)
+    
+    col_q1, col_q2 = st.columns(2)
+    with col_q1:
+        if st.button("Summarize", use_container_width=True, key="qa_summarize"):
+            st.session_state.pending_message = "Provide a brief summary of this document in 2-3 sentences."
+            st.rerun()
+        if st.button("Citations", use_container_width=True, key="qa_citations"):
+            st.session_state.pending_message = "Add relevant Kenyan legal citations to this document."
+            st.rerun()
+        if st.button("Clarity", use_container_width=True, key="qa_clarity"):
+            st.session_state.pending_message = "Identify sections that could be clearer and suggest improvements."
+            st.rerun()
+    
+    with col_q2:
+        if st.button("Formalize", use_container_width=True, key="qa_formalize"):
+            st.session_state.pending_message = "Make this document more formal and professional."
+            st.rerun()
+        if st.button("Compliance", use_container_width=True, key="qa_compliance"):
+            st.session_state.pending_message = "Check this document for compliance with Kenyan law."
+            st.rerun()
+        if st.button("Missing Info", use_container_width=True, key="qa_missing"):
+            st.session_state.pending_message = "Find any placeholders or missing information."
+            st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Chat input
+    user_input = st.text_area(
+        "Message",
+        placeholder="Ask a question or request an edit...",
+        height=80,
+        key="chat_input",
+        disabled=st.session_state.chat_is_streaming,
+        label_visibility="collapsed"
+    )
+    
+    col_send_clear = st.columns(1)[0]
+    with col_send_clear:
+        send_button = st.button(
+            "Send",
+            use_container_width=True,
+            type="primary",
+            disabled=st.session_state.chat_is_streaming or not user_input.strip()
+        )
+        
+        if st.button("Clear", use_container_width=True):
+            st.session_state.chat_messages = []
+            st.session_state.chat_session_id = str(uuid.uuid4())
+            st.rerun()
+    
+    # Handle pending quick action message
+    if "pending_message" in st.session_state:
+        user_input = st.session_state.pending_message
+        del st.session_state.pending_message
+        send_button = True
+    
+    # Handle send
+    if send_button and user_input.strip():
+        st.session_state.chat_is_streaming = True
+        
+        # Prepare metadata
+        doc_metadata = {
+            "type": document.get("document_type", "Unknown"),
+            "subtype": document.get("document_subtype", ""),
+            "title": document.get("title", "Untitled")
+        }
+        
+        matter_metadata = {
+            "name": matter.get("name", "Unknown"),
+            "client_name": matter.get("client_name", "Unknown"),
+            "jurisdiction": matter.get("jurisdiction", "Kenya")
+        }
+        
+        # Stream AI response
+        try:
+            full_response = ""
+            response_placeholder = st.empty()
+            
+            for chunk in _handle_chat_message(
+                db=db,
+                version_id=version_id,
+                document_id=document['id'],
+                session_id=st.session_state.chat_session_id,
+                message=user_input.strip(),
+                document_content=document_content,
+                document_metadata=doc_metadata,
+                matter_metadata=matter_metadata
+            ):
+                full_response += chunk
+                response_placeholder.markdown(f"""
+                <div class="chat-message assistant">
+                    <div class="chat-role">ClauseBot</div>
+                    <div>{full_response}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Reload messages
+            st.session_state.chat_messages = db.get_chat_history(
+                version_id,
+                st.session_state.chat_session_id,
+                limit=50
+            )
+            
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+        finally:
+            st.session_state.chat_is_streaming = False
+            st.rerun()
+
 
 # ============================================================================
 # MAIN RENDER FUNCTION
@@ -1371,15 +1767,59 @@ def render_document_editor():
         
         with col_h2:
             st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
-            if st.button("Versions", use_container_width=True):
-                st.session_state.show_versions_panel = not st.session_state.show_versions_panel
-                st.rerun()
+            
+            # Header buttons row
+            col_v, col_c = st.columns(2)
+            with col_v:
+                if st.button("Versions", use_container_width=True):
+                    st.session_state.show_versions_panel = not st.session_state.show_versions_panel
+                    st.rerun()
+            with col_c:
+                # Initialize chat panel state
+                if "show_chat_panel" not in st.session_state:
+                    st.session_state.show_chat_panel = True
+                
+                # CHECK ACCESS: ClauseBot
+                has_chatbot_access = sub_manager.has_access(st.session_state.user_id, "ai_chatbot")
+                
+                if has_chatbot_access:
+                    if st.button("ClauseBot", use_container_width=True):
+                        st.session_state.show_chat_panel = not st.session_state.show_chat_panel
+                        st.rerun()
+                else:
+                    # Render disabled button for trial users
+                    st.button("ClauseBot 🔒", use_container_width=True, disabled=True, help="Upgrade to Individual, Team, or Enterprise to access ClauseBot")
+                    # Force panel closed if no access
+                    if st.session_state.show_chat_panel:
+                        st.session_state.show_chat_panel = False
         
+        # Layout based on which panels are open
+        panels_open = []
         if st.session_state.show_versions_panel:
-            col_editor, col_versions = st.columns([2, 1])
-        else:
-            col_editor = st.container()
+            panels_open.append("versions")
+        if st.session_state.get("show_chat_panel", False):
+            panels_open.append("chat")
         
+        # Create appropriate column layout
+        if len(panels_open) == 2:  # Both panels
+            col_versions, col_editor, col_chat = st.columns([1, 2, 1])
+        elif "versions" in panels_open:  # Only versions
+            col_versions, col_editor = st.columns([1, 3])
+            col_chat = None
+        elif "chat" in panels_open:  # Only chat
+            col_editor, col_chat = st.columns([3, 1])
+            col_versions = None
+        else:  # No panels
+            col_editor = st.container()
+            col_versions = None
+            col_chat = None
+        
+        # Render versions panel if needed
+        if col_versions and st.session_state.show_versions_panel:
+            with col_versions:
+                _render_versions_panel(db, document_id, matter_id)
+        
+        # Render main editor
         with col_editor:
             if has_edit_access:
                 # CRITICAL: Render editor as a fragment so it doesn't reload during autosaves
@@ -1403,6 +1843,17 @@ def render_document_editor():
             with col_versions:
                 _render_versions_panel(db, document_id, st.session_state.current_version_id)
                 st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Render chat panel if needed
+        if col_chat and st.session_state.get("show_chat_panel", False):
+            with col_chat:
+                _render_chat_panel(
+                    db=db,
+                    document=document,
+                    matter=matter,
+                    version_id=st.session_state.current_version_id,
+                    document_content=st.session_state.editor_content
+                )
         
         st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
         

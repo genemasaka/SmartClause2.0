@@ -57,6 +57,7 @@ FEATURES = {
     "api_access": [ENTERPRISE_TIER],
     "custom_templates": [TEAM_TIER, ENTERPRISE_TIER],
     "priority_support": [TEAM_TIER, ENTERPRISE_TIER],
+    "ai_chatbot": [INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
 }
 
 
