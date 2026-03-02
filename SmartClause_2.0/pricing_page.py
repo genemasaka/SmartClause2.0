@@ -320,7 +320,6 @@ def render_pricing_page():
     faq_data = [
         ("Can I upgrade or downgrade anytime?", "Yes, you can upgrade your plan at any time. Changes take effect immediately."),
         ("What payment methods do you accept?", "We accept M-Pesa. Payments are processed securely and instantly."),
-        ("Do you offer refunds?", "We offer a 7-day money-back guarantee if you're not satisfied with our service."),
         ("What happens to my documents if I cancel?", "Your documents remain accessible in read-only mode even after cancellation.")
     ]
     
