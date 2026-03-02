@@ -7,7 +7,7 @@ import streamlit as st
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 import re
-import streamlit as st
+from error_helpers import show_error
 
 def perform_search(db, query: str, view: str) -> Dict[str, List[Dict[str, Any]]]:
     """
@@ -68,7 +68,7 @@ def search_matters(db, query: str) -> List[Dict[str, Any]]:
         return matches[:10]  # Return top 10 matches
     
     except Exception as e:
-        st.error(f"Error searching matters: {e}")
+        show_error(e, "search")
         return []
 
 
@@ -115,7 +115,7 @@ def search_documents(db, query: str) -> List[Dict[str, Any]]:
         return matches[:10]
     
     except Exception as e:
-        st.error(f"Error searching documents: {e}")
+        show_error(e, "search")
         return []
 
 
@@ -147,7 +147,7 @@ def search_clauses(db, query: str) -> List[Dict[str, Any]]:
         return matches[:10]
     
     except Exception as e:
-        st.error(f"Error searching clauses: {e}")
+        show_error(e, "search")
         return []
 
 
@@ -194,7 +194,7 @@ def get_time_ago(dt_str: str) -> str:
             return f"{minutes}m ago"
         else:
             return "Just now"
-    except:
+    except Exception:
         return ""
 
 

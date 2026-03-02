@@ -3,6 +3,7 @@ from database import DatabaseManager
 import time
 from bs4 import BeautifulSoup
 import streamlit.components.v1 as components
+from error_helpers import show_error
 import json
 
 
@@ -25,23 +26,34 @@ def render_clause_library():
         </div>
         """, unsafe_allow_html=True)
         
-        st.info("🔒 The Clause Library is available exclusively to Standard Plan subscribers.")
+        st.info("🔒 The Clause Library is available to Individual Plan subscribers and up.")
         
         st.markdown("""
         <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px;">
-            <div style="font-size: 64px; margin-bottom: 24px;">📚</div>
+            <div style="display: flex; justify-content: center; margin-bottom: 24px;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 21.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
             <h2 style="color: #FFFFFF; margin-bottom: 16px;">Unlock the Clause Library</h2>
             <p style="color: #9BA1B0; font-size: 16px; max-width: 600px; margin: 0 auto 32px auto; line-height: 1.6;">
                 Save your own custom clauses, categorize them, and insert them into your documents instantly.
             </p>
-            <div style="display: flex; justify-content: center; gap: 16px;">
-                <a href="?view=pricing" target="_self" style="background-color: #4B9EFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                    Upgrade to Standard
-                </a>
-            </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Use a Streamlit button + update_query_params so the session cookie is
+        # preserved during navigation (HTML <a> tags bypass Streamlit's session
+        # management and cause the user to appear logged out).
+        from auth import update_query_params
+        st.markdown('<div style="margin-top: 24px;"></div>', unsafe_allow_html=True)
+        col_l, col_btn, col_r = st.columns([2, 1, 2])
+        with col_btn:
+            if st.button("Upgrade to Individual Plan", type="primary", use_container_width=True):
+                update_query_params({"view": "pricing"})
+                st.rerun()
         return
+
 
     # Page header
     st.markdown("""
@@ -337,7 +349,7 @@ def render_add_clause_form(db: DatabaseManager):
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"❌ Failed to add clause: {str(e)}")
+                    show_error(e, "clause")
 
 
 @st.dialog("Edit Clause", width="large")
@@ -404,4 +416,4 @@ def render_edit_clause_form(db: DatabaseManager, clause_id: str):
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Failed to update clause: {str(e)}")
+                    show_error(e, "clause")

@@ -12,6 +12,7 @@ from search import render_search_modal
 from pricing_page import render_pricing_page
 from subscription_manager import SubscriptionManager
 from components.organization_dashboard import render_organization_dashboard
+from legal_pages import render_privacy_policy, render_terms_of_use
 # ============================================================================
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
@@ -21,6 +22,44 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# ============================================================================
+# FAVICON OVERRIDE - Prevent Streamlit logo flash on reload
+# ============================================================================
+import base64 as _b64, os as _os
+_favicon_path = "assets/smartclause_badge.png"
+if _os.path.exists(_favicon_path):
+    with open(_favicon_path, "rb") as _f:
+        _favicon_b64 = _b64.b64encode(_f.read()).decode()
+    st.markdown(f"""
+    <script>
+    (function() {{
+        var iconUrl = "data:image/png;base64,{_favicon_b64}";
+        // Immediately set favicon
+        var link = document.querySelector("link[rel*='icon']");
+        if (link) {{
+            link.href = iconUrl;
+        }} else {{
+            link = document.createElement('link');
+            link.rel = 'shortcut icon';
+            link.href = iconUrl;
+            document.head.appendChild(link);
+        }}
+        // Watch for Streamlit overwriting the favicon and re-apply
+        var observer = new MutationObserver(function(mutations) {{
+            mutations.forEach(function(m) {{
+                if (m.type === 'childList') {{
+                    var icons = document.querySelectorAll("link[rel*='icon']");
+                    icons.forEach(function(el) {{
+                        if (el.href !== iconUrl) el.href = iconUrl;
+                    }});
+                }}
+            }});
+        }});
+        observer.observe(document.head, {{ childList: true, subtree: true }});
+    }})();
+    </script>
+    """, unsafe_allow_html=True)
 
 # ============================================================================
 # LOAD CSS BEFORE AUTHENTICATION CHECK
@@ -76,10 +115,34 @@ def preserve_navigation_state():
 preserve_navigation_state()
 
 # ============================================================================
+# PUBLIC PAGES - Accessible without authentication (legal pages)
+# ============================================================================
+_public_view = st.query_params.get("view", "")
+if _public_view in ("privacy", "terms"):
+    if not st.session_state.get("authenticated"):
+        local_css()  # Ensure styles are loaded
+        if _public_view == "privacy":
+            render_privacy_policy()
+        else:
+            render_terms_of_use()
+        st.stop()
+
+# ============================================================================
 # AUTHENTICATION CHECK - WILL STOP HERE IF NOT LOGGED IN
 # This now uses Supabase session recovery automatically
 # ============================================================================
 check_authentication()
+
+# ============================================================================
+# PROACTIVE SESSION PERSISTENCE
+# ============================================================================
+# If authenticated but "session" is missing from URL, push it.
+# This prevents logout if the user refreshes or lands on a URL without the param.
+if st.session_state.get("authenticated") and "session" not in st.query_params:
+    session_cookie = st.session_state.get("session_cookie")
+    if session_cookie:
+        from auth import update_query_params
+        update_query_params(st.query_params.to_dict())
 
 # ============================================================================
 # RESTORE SESSION STATE IMMEDIATELY AFTER AUTH
@@ -270,11 +333,12 @@ with st.sidebar:
     .modern-nav-item {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 12px;
+        gap: 10px;
+        padding: 0 12px;
+        min-height: 38px;
         margin: 4px 0;
-        border-radius: 10px;
-        color: #FFFFFF;
+        border-radius: 8px;
+        color: #FFFFFF !important;
         text-decoration: none !important;
         font-size: 14px;
         font-weight: 400;
@@ -284,16 +348,25 @@ with st.sidebar:
     }
     
     .modern-nav-item:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: #FFFFFF;
+        background: rgba(255, 255, 255, 0.07);
+        color: #FFFFFF !important;
         text-decoration: none !important;
     }
     
     .modern-nav-item.active {
-        background: #4B9EFF;
-        color: #FFFFFF;
+        background: #252930;
+        color: #FFFFFF !important;
         font-weight: 500;
         text-decoration: none !important;
+    }
+    
+    .modern-nav-item span {
+        color: #FFFFFF !important;
+    }
+    
+    .modern-nav-item svg {
+        flex-shrink: 0;
+        opacity: 0.9;
     }
     
     .tier-tag {
@@ -402,20 +475,32 @@ with st.sidebar:
         elif tier == "trial":
             tier_display = '<span class="tier-tag" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">Trial</span>'
     
-    # Modern Navigation (no icons, plain white text)
+    # Modern Navigation with icons
     st.markdown(f"""
     <div class="modern-nav">
         <a class="modern-nav-item {'active' if view in ['matters', 'matter_details'] else ''}" href="?view=matters{session_param}" target="_self">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                <path d="M2.50047 13H8.50047M15.5005 13H21.5005M12.0005 7V21M12.0005 7C13.3812 7 14.5005 5.88071 14.5005 4.5M12.0005 7C10.6198 7 9.50047 5.88071 9.50047 4.5M4.00047 21L20.0005 21M4.00047 4.50001L9.50047 4.5M9.50047 4.5C9.50047 3.11929 10.6198 2 12.0005 2C13.3812 2 14.5005 3.11929 14.5005 4.5M14.5005 4.5L20.0005 4.5M8.88091 14.3364C8.48022 15.8706 7.11858 17 5.50047 17C3.88237 17 2.52073 15.8706 2.12004 14.3364C2.0873 14.211 2.07093 14.1483 2.06935 13.8979C2.06838 13.7443 2.12544 13.3904 2.17459 13.2449C2.25478 13.0076 2.34158 12.8737 2.51519 12.6059L5.50047 8L8.48576 12.6059C8.65937 12.8737 8.74617 13.0076 8.82636 13.2449C8.87551 13.3904 8.93257 13.7443 8.9316 13.8979C8.93002 14.1483 8.91365 14.211 8.88091 14.3364ZM21.8809 14.3364C21.4802 15.8706 20.1186 17 18.5005 17C16.8824 17 15.5207 15.8706 15.12 14.3364C15.0873 14.211 15.0709 14.1483 15.0693 13.8979C15.0684 13.7443 15.1254 13.3904 15.1746 13.2449C15.2548 13.0076 15.3416 12.8737 15.5152 12.6059L18.5005 8L21.4858 12.6059C21.6594 12.8737 21.7462 13.0076 21.8264 13.2449C21.8755 13.3904 21.9326 13.7443 21.9316 13.8979C21.93 14.1483 21.9137 14.211 21.8809 14.3364Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span>Matters</span>
         </a>
         <a class="modern-nav-item {'active' if view == 'clause_library' else ''}" href="?view=clause_library{session_param}" target="_self">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 21.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span>Clause Library</span>
         </a>
         <a class="modern-nav-item {'active' if view == 'organization' else ''}" href="?view=organization{session_param}" target="_self">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                <path d="M7.5 11H4.6C4.03995 11 3.75992 11 3.54601 11.109C3.35785 11.2049 3.20487 11.3578 3.10899 11.546C3 11.7599 3 12.0399 3 12.6V21M16.5 11H19.4C19.9601 11 20.2401 11 20.454 11.109C20.6422 11.2049 20.7951 11.3578 20.891 11.546C21 11.7599 21 12.0399 21 12.6V21M16.5 21V6.2C16.5 5.0799 16.5 4.51984 16.282 4.09202C16.0903 3.71569 15.7843 3.40973 15.408 3.21799C14.9802 3 14.4201 3 13.3 3H10.7C9.57989 3 9.01984 3 8.59202 3.21799C8.21569 3.40973 7.90973 3.71569 7.71799 4.09202C7.5 4.51984 7.5 5.0799 7.5 6.2V21M22 21H2M11 7H13M11 11H13M11 15H13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span>Organization</span>
             {tier_display}
         </a>
         <a class="modern-nav-item {'active' if view == 'pricing' else ''}" href="?view=pricing{session_param}" target="_self">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                <path d="M22 8.5H2M2 12.5H5.54668C6.08687 12.5 6.35696 12.5 6.61813 12.5466C6.84995 12.5879 7.0761 12.6563 7.29191 12.7506C7.53504 12.8567 7.75977 13.0065 8.20924 13.3062L8.79076 13.6938C9.24023 13.9935 9.46496 14.1433 9.70809 14.2494C9.9239 14.3437 10.15 14.4121 10.3819 14.4534C10.643 14.5 10.9131 14.5 11.4533 14.5H12.5467C13.0869 14.5 13.357 14.5 13.6181 14.4534C13.85 14.4121 14.0761 14.3437 14.2919 14.2494C14.535 14.1433 14.7598 13.9935 15.2092 13.6938L15.7908 13.3062C16.2402 13.0065 16.465 12.8567 16.7081 12.7506C16.9239 12.6563 17.15 12.5879 17.3819 12.5466C17.643 12.5 17.9131 12.5 18.4533 12.5H22M2 7.2L2 16.8C2 17.9201 2 18.4802 2.21799 18.908C2.40973 19.2843 2.71569 19.5903 3.09202 19.782C3.51984 20 4.07989 20 5.2 20L18.8 20C19.9201 20 20.4802 20 20.908 19.782C21.2843 19.5903 21.5903 19.2843 21.782 18.908C22 18.4802 22 17.9201 22 16.8V7.2C22 6.0799 22 5.51984 21.782 5.09202C21.5903 4.7157 21.2843 4.40974 20.908 4.21799C20.4802 4 19.9201 4 18.8 4L5.2 4C4.0799 4 3.51984 4 3.09202 4.21799C2.7157 4.40973 2.40973 4.71569 2.21799 5.09202C2 5.51984 2 6.07989 2 7.2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <span>Pricing</span>
         </a>
     </div>
@@ -523,6 +608,7 @@ def render_matters():
                     st.session_state["filter_status"] = status_filter
                     st.session_state["filter_matter_type"] = matter_type_filter
                     st.session_state["filter_jurisdiction"] = jurisdiction_filter
+                    update_query_params(st.query_params.to_dict())
                     st.rerun()
             
             with col2:
@@ -703,6 +789,10 @@ elif view == "editor":
 elif view == "matter_details":
     from matter_details import render_matter_details
     render_matter_details()
+elif view == "privacy":
+    render_privacy_policy()
+elif view == "terms":
+    render_terms_of_use()
 else:
     render_matters()
 

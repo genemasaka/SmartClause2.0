@@ -3,6 +3,7 @@ from datetime import datetime
 from database import DatabaseManager
 from typing import Optional, Dict, Any
 import logging
+from error_helpers import show_error
 
 
 def get_time_ago(dt: datetime) -> str:
@@ -190,7 +191,7 @@ def render_edit_matter_modal(matter: Dict[str, Any], db: DatabaseManager):
                         st.error("❌ Failed to update matter. Please try again.")
                 
                 except Exception as e:
-                    st.error(f"❌ Error updating matter: {str(e)}")
+                    show_error(e, "matter")
     
     # Show dialog
     edit_matter_dialog()
@@ -440,7 +441,8 @@ def render_matter_details():
         render_case_manager(matter_id, matter["name"], db)
     except Exception as e:
         logging.error(f"Error loading case manager: {e}", exc_info=True)
-        st.error(f"Case manager unavailable: {str(e)}")
+        st.error("⚠️ Case manager is temporarily unavailable.")
+        st.info("💡 Please try refreshing the page.")
     
     st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
     

@@ -1,5 +1,6 @@
 import streamlit as st
 from database import DatabaseManager
+from error_helpers import show_error
 
 
 def render_matter_actions_menu(matter_id: str, matter_name: str):
@@ -133,7 +134,7 @@ def handle_pin_matter(matter_id: str) -> bool:
             return False
     
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        show_error(e, "matter")
         return False
 
 
@@ -160,7 +161,7 @@ def handle_archive_matter(matter_id: str) -> bool:
             return False
     
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        show_error(e, "matter")
         return False
 
 
@@ -186,5 +187,5 @@ def handle_delete_matter(matter_id: str) -> bool:
             return False
     
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        show_error(e, "matter")
         return False

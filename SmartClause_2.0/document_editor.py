@@ -14,6 +14,8 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from database import DatabaseManager
 from modal_close_helper import confirm_generation_started, is_waiting_for_generation
+from error_helpers import show_error
+from auth import update_query_params
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1230,7 +1232,7 @@ def _render_chat_panel(
         if st.session_state.chat_is_streaming:
             st.markdown("""
             <div style="padding: 12px; color: #4A9EFF;">
-                <em>AI is thinking...</em>
+                <em>Thinking...</em>
             </div>
             """, unsafe_allow_html=True)
     
@@ -1340,7 +1342,7 @@ def _render_chat_panel(
             )
             
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            show_error(e, "chat")
         finally:
             st.session_state.chat_is_streaming = False
             st.rerun()
@@ -1469,10 +1471,7 @@ def render_document_editor():
             
         except Exception as e:
             loading_placeholder.empty()
-            st.error(f"Error loading document: {str(e)}")
-            logger.error(f"Document loading error: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            show_error(e, "document")
             return
     else:
         # Use cached data (no loading animation on subsequent renders)
@@ -1541,7 +1540,7 @@ def render_document_editor():
         
         generator = DocumentGenerator()
         
-        with st.spinner("AI is drafting your document..."):
+        with st.spinner("Drafting your document..."):
             stream_container = st.empty()
             generated_content = ""
             generation_failed = False
@@ -1683,12 +1682,12 @@ def render_document_editor():
                     error_message = "Generated content is too short or empty"
                 elif "Error" in generated_content[:200] or "error" in generated_content[:200].lower():
                     generation_failed = True
-                    error_message = "AI generation returned an error"
+                    error_message = "Document generation returned an error"
                 
             except Exception as e:
                 generation_failed = True
                 error_message = str(e)
-                st.error(f"Generation failed: {error_message}")
+                show_error(e, "document")
             
             if not generation_failed and generated_content:
                 try:
@@ -1725,7 +1724,7 @@ def render_document_editor():
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Failed to save generated document: {str(e)}")
+                    show_error(e, "document")
                     db.update_document_status(document_id, "failed")
             else:
                 st.error(f"Generation failed: {error_message}")
@@ -1733,7 +1732,7 @@ def render_document_editor():
                 db.update_document_status(document_id, "failed")
                 
                 if st.button("Back to Matter Details"):
-                    st.query_params.update({"view": "matter_details", "matter_id": matter_id})
+                    update_query_params({"view": "matter_details", "matter_id": matter_id})
                     st.rerun()
                 
                 return
@@ -1899,9 +1898,7 @@ def render_document_editor():
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"Failed to save version: {str(e)}")
-                        import traceback
-                        st.error(traceback.format_exc())
+                        show_error(e, "document")
         
         with col2:
             # Generate DOCX from current editor content
@@ -1950,9 +1947,7 @@ def render_document_editor():
                         help=f"Download current version as {docx_filename}"
                     )
             except Exception as e:
-                st.error(f"Export failed: {str(e)}")
-                import traceback
-                st.error(traceback.format_exc())
+                show_error(e, "document")
         
         with col3:
             if st.button("Save Major Version", use_container_width=True):
@@ -2068,6 +2063,4 @@ def _render_major_version_modal(db: DatabaseManager, document_id: str):
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Failed to save major version: {str(e)}")
-                    import traceback
-                    st.error(traceback.format_exc())
+                    show_error(e, "document")

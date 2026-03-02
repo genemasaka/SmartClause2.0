@@ -22,6 +22,29 @@ class MemberRole(Enum):
     MEMBER = "member"
 
 
+def get_user_role_from_org(org: dict, user_id: str) -> str:
+    """
+    Safely extract the role for a specific user from the joined
+    'organization_members' list on the org dict.
+
+    This replaces the fragile `org.get('organization_members', [{}])[0].get('role')`
+    pattern used previously, which silently returned the wrong role whenever
+    the member list was ordered differently or had multiple entries.
+
+    Args:
+        org: Organization dict with an embedded 'organization_members' list
+        user_id: The user whose role we want to look up
+
+    Returns:
+        Role string ('owner', 'admin', 'member') or 'member' as safe default
+    """
+    members = org.get('organization_members') or []
+    for m in members:
+        if m.get('user_id') == user_id:
+            return m.get('role', 'member')
+    return 'member'
+
+
 class OrganizationManager:
     """Manages organization-level operations for enterprise subscriptions"""
     
@@ -166,11 +189,15 @@ class OrganizationManager:
         if existing_org:
             return existing_org, False
         
-        # If corporate email, check for existing organization with that domain
+        # If corporate email, check for existing organization with that domain.
+        # SECURITY: Auto-join is an opt-in feature that org admins must explicitly
+        # enable (allow_domain_autojoin = True on the org record). Without it,
+        # any user who registers with a matching corporate email would be silently
+        # added to that firm's org — a significant unauthorized-access risk.
         if domain:
             org = self.get_organization_by_domain(domain)
-            if org:
-                # Add user to existing organization
+            if org and org.get('allow_domain_autojoin', False):
+                # Admin has explicitly enabled domain-based auto-joining
                 self.add_organization_member(org['id'], user_id, MemberRole.MEMBER.value)
                 return org, False
         
@@ -221,17 +248,21 @@ class OrganizationManager:
         Returns:
             Member record dict
         """
-        result = self.db.add_organization_member(
+        # Use the atomic RPC that acquires a row-level lock on the subscription
+        # before inserting, preventing race conditions on seat enforcement.
+        response = self.db.add_organization_member_atomic(
             organization_id=organization_id,
             user_id=user_id,
             role=role,
             invited_by=invited_by
         )
-        
-        # Update seats_used count
-        self._update_seats_used(organization_id)
-        
-        return result[0] if result else None
+
+        if not response.get('success'):
+            error_msg = response.get('error', 'Unknown error adding member')
+            raise ValueError(error_msg)
+
+        # The atomic function also updates seats_used, so no separate call needed.
+        return response.get('member')
     
     def remove_organization_member(
         self,
@@ -569,32 +600,51 @@ class OrganizationManager:
         document_type: str = 'general'
     ) -> bool:
         """
-        Record that a user created a document
-        
+        Record that a user created a document.
+
+        For trial users (no subscription record) this is a no-op that returns True,
+        so document generation is never blocked by a missing usage record.
+
         Args:
             user_id: User's UUID
             document_type: Type of document created
-            
+
         Returns:
-            True if recorded successfully
+            True if recorded successfully (or skipped for trial)
         """
-        # Get user's organization and subscription
-        org = self.get_user_organization(user_id)
-        
-        if not org:
-            raise ValueError("User has no organization")
-        
-        subscription = self.get_organization_subscription(org['id'])
-        
-        if not subscription:
-            raise ValueError("Organization has no subscription")
-        
-        result = self.db.record_document_usage(
-            user_id=user_id,
-            organization_id=org['id'],
-            document_type=document_type,
-            billing_period_start=subscription['current_period_start'],
-            billing_period_end=subscription['current_period_end']
-        )
-        
-        return result
+        import logging
+        _logger = logging.getLogger(__name__)
+
+        try:
+            org = self.get_user_organization(user_id)
+
+            if not org:
+                # No org yet (new user in onboarding) — don't block document creation
+                _logger.warning(
+                    f"record_document_creation: no org for user {user_id} — skipping usage record"
+                )
+                return True
+
+            subscription = self.get_organization_subscription(org['id'])
+
+            if not subscription:
+                # Trial user: no paid subscription — skip usage recording silently
+                _logger.info(
+                    f"record_document_creation: no subscription for org {org['id']} "
+                    f"(trial user {user_id}) — skipping usage record"
+                )
+                return True
+
+            result = self.db.record_document_usage(
+                user_id=user_id,
+                organization_id=org['id'],
+                document_type=document_type,
+                billing_period_start=subscription['current_period_start'],
+                billing_period_end=subscription['current_period_end']
+            )
+            return bool(result)
+
+        except Exception as e:
+            _logger.error(f"record_document_creation failed for user {user_id}: {e}")
+            # Don't block document creation due to a recording failure
+            return True

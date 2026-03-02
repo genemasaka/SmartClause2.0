@@ -1305,10 +1305,10 @@ class DatabaseManager:
             return False
 
     def create_payment_transaction(
-        self, 
-        user_id: str, 
-        amount: float, 
-        transaction_type: str, 
+        self,
+        user_id: str,
+        amount: float,
+        transaction_type: str,
         checkout_request_id: str,
         phone_number_hash: str,
         credits_purchased: int = 0,
@@ -1329,7 +1329,6 @@ class DatabaseManager:
                 "payment_method": "mpesa",
                 "transaction_date": datetime.now().isoformat(),
                 "verification_attempts": 0,
-                # Store additional metadata if provided
                 "metadata": {
                     "organization_id": organization_id,
                     "seats": seats,
@@ -1337,26 +1336,39 @@ class DatabaseManager:
                 }
             }
             result = self.client.table("payment_transactions").insert(data).execute()
-            return result.data[0] if result.data else None
+
+            if not result.data:
+                logger.error(
+                    f"create_payment_transaction insert returned no data for "
+                    f"checkout_id={checkout_request_id}. Full response: {result}"
+                )
+                return None
+
+            logger.info(f"Payment transaction created: {checkout_request_id}")
+            return result.data[0]
+
         except Exception as e:
-            logger.error(f"Error creating transaction: {e}")
+            logger.error(
+                f"Error creating transaction for checkout_id={checkout_request_id}: "
+                f"{e}", exc_info=True          # <-- exc_info gives you the full traceback
+            )
             return None
 
-    def update_payment_status(self, checkout_request_id: str, status: str, receipt_number: Optional[str] = None) -> Dict[str, Any]:
-        """Update status of a payment transaction."""
-        try:
-            updates = {
-                "payment_status": status
-                # "updated_at": datetime.now().isoformat()  # Column not in schema
-            }
-            if receipt_number:
-                updates["mpesa_receipt_number"] = receipt_number
-                
-            self.client.table("payment_transactions").update(updates).eq("checkout_request_id", checkout_request_id).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Error updating payment status: {e}")
-            return False
+        def update_payment_status(self, checkout_request_id: str, status: str, receipt_number: Optional[str] = None) -> Dict[str, Any]:
+            """Update status of a payment transaction."""
+            try:
+                updates = {
+                    "payment_status": status
+                    # "updated_at": datetime.now().isoformat()  # Column not in schema
+                }
+                if receipt_number:
+                    updates["mpesa_receipt_number"] = receipt_number
+                    
+                self.client.table("payment_transactions").update(updates).eq("checkout_request_id", checkout_request_id).execute()
+                return True
+            except Exception as e:
+                logger.error(f"Error updating payment status: {e}")
+                return False
 
     def get_user_payment_history(self, user_id: str) -> List[Dict[str, Any]]:
         """Get payment history for a user."""
@@ -1396,8 +1408,14 @@ class DatabaseManager:
     def get_payment_transaction_by_checkout_id(self, checkout_request_id: str) -> Optional[Dict[str, Any]]:
         """Get payment transaction by checkout request ID."""
         try:
-            result = self.client.table("payment_transactions").select("*").eq("checkout_request_id", checkout_request_id).single().execute()
-            return result.data
+            # Removed .single() to avoid PGRST116 error when transaction is not found (e.g. during polling)
+            result = self.client.table("payment_transactions").select("*").eq("checkout_request_id", checkout_request_id).execute()
+            
+            if result.data and len(result.data) > 0:
+                return result.data[0]
+            
+            logger.debug(f"No transaction found for checkout ID: {checkout_request_id}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching transaction by checkout ID: {e}")
             return None
@@ -1466,7 +1484,7 @@ class DatabaseManager:
         """Get user's organization."""
         try:
             result = self.client.table("organizations")\
-                .select("*, organization_members!inner(role, status)")\
+                .select("*, organization_members!inner(user_id, role, status)")\
                 .eq("organization_members.user_id", user_id)\
                 .eq("organization_members.status", "active")\
                 .single()\
@@ -1514,19 +1532,48 @@ class DatabaseManager:
     def get_organization_subscription(self, organization_id: str) -> Optional[Dict[str, Any]]:
         """Get organization's active subscription."""
         try:
-            result = self.client.table("organization_subscriptions")\
-                .select("*")\
-                .eq("organization_id", organization_id)\
-                .eq("status", "active")\
-                .single()\
+            result = (
+                self.client.table("organization_subscriptions")
+                .select("*")
+                .eq("organization_id", organization_id)
+                .eq("status", "active")
+                .limit(1)
                 .execute()
-            
-            return result.data
-        
+            )
+            return result.data[0] if result.data else None
         except Exception as e:
             logger.debug(f"No active subscription found for organization {organization_id}: {e}")
             return None
     
+    def ensure_organization_subscription(self, organization_id: str, tier: str) -> Optional[Dict[str, Any]]:
+        """Ensure a subscription record exists for the given organization and tier."""
+        try:
+            # Check if exists
+            sub = self.get_organization_subscription(organization_id)
+            if sub:
+                return sub
+            
+            # Create default if missing and tier is paid
+            if tier in ["individual", "team", "enterprise"]:
+                data = {
+                    "organization_id": organization_id,
+                    "subscription_tier": tier,
+                    "status": "active",
+                    "seats_purchased": 10 if tier in ["team", "enterprise"] else 1,
+                    "seats_used": 1,
+                    "price_per_seat": 650000 if tier == "team" else 0,
+                    "current_period_start": datetime.utcnow().isoformat(),
+                    "current_period_end": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+                    "next_billing_date": (datetime.utcnow() + timedelta(days=30)).isoformat()
+                }
+                
+                result = self.client.table("organization_subscriptions").insert(data).execute()
+                return result.data[0] if result.data else None
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error ensuring organization subscription: {e}")
+            return None
     def add_organization_member(
         self,
         organization_id: str,
@@ -1563,7 +1610,7 @@ class DatabaseManager:
         """Get all members of an organization."""
         try:
             query = self.client.table("organization_members")\
-                .select("*, users:user_id(*)")\
+                .select("*")\
                 .eq("organization_id", organization_id)
             
             if not include_suspended:
@@ -1576,6 +1623,61 @@ class DatabaseManager:
             logger.error(f"Error fetching organization members: {e}")
             return []
     
+    # ── Invitation helpers ─────────────────────────────────────────────────────
+
+    def create_organization_invitation(
+        self,
+        organization_id: str,
+        invited_email: str,
+        role: str,
+        invited_by: str,
+        token: str,
+        expires_at: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Store a pending team invitation."""
+        try:
+            data = {
+                "organization_id": organization_id,
+                "invited_email": invited_email,
+                "role": role,
+                "invited_by": invited_by,
+                "token": token,
+                "expires_at": expires_at,
+                "status": "pending",
+            }
+            result = self.client.table("organization_invitations").insert(data).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Error creating invitation: {e}")
+            return None
+
+    def get_pending_invitations(self, organization_id: str) -> List[Dict[str, Any]]:
+        """Get all pending invitations for an organization."""
+        try:
+            result = (
+                self.client.table("organization_invitations")
+                .select("*")
+                .eq("organization_id", organization_id)
+                .eq("status", "pending")
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.debug(f"Could not fetch invitations (table may not exist yet): {e}")
+            return []
+
+    def cancel_invitation(self, invitation_id: str) -> bool:
+        """Cancel (soft-delete) a pending invitation."""
+        try:
+            self.client.table("organization_invitations").update(
+                {"status": "cancelled"}
+            ).eq("id", invitation_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling invitation: {e}")
+            return False
+
     def record_document_usage(
         self,
         user_id: str,
@@ -1624,14 +1726,99 @@ class DatabaseManager:
             logger.error(f"Error getting document usage: {e}")
             return 0
     
+    def add_organization_member_atomic(
+        self,
+        organization_id: str,
+        user_id: str,
+        role: str = 'member',
+        invited_by: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Atomically check seat availability and add a member in a single DB round-trip.
+
+        Calls the ``add_org_member_atomic`` Postgres function, which acquires a
+        FOR UPDATE row lock on the subscription row before inserting the member.
+        This prevents the race condition where two concurrent invite acceptances
+        both read "1 seat available" and both succeed.
+
+        Returns a dict with:
+            {'success': True,  'member': {...}}   – member added
+            {'success': False, 'error':  '...'}   – seats full or other DB error
+
+        Requires: migrations/org_fixes.sql to have been applied.
+        """
+        try:
+            result = self.client.rpc(
+                "add_org_member_atomic",
+                {
+                    "p_organization_id": organization_id,
+                    "p_user_id":         user_id,
+                    "p_role":            role,
+                    "p_invited_by":      invited_by,
+                }
+            ).execute()
+            return result.data if result.data else {"success": False, "error": "No data returned"}
+        except Exception as e:
+            logger.error(f"Error in add_organization_member_atomic: {e}")
+            return {"success": False, "error": str(e)}
+
+    def upgrade_org_tier_atomic(
+        self,
+        organization_id: str,
+        new_tier: str,
+        seats: int,
+        price_per_seat: int
+    ) -> Dict[str, Any]:
+        """
+        Atomically update an org's tier AND upsert its subscription row.
+
+        Calls the ``upgrade_org_tier_atomic`` Postgres function, which executes
+        both writes in a single implicit transaction. If either write fails the
+        whole function rolls back, preventing the partial-state bug where
+        organizations.subscription_tier is updated but the subscription row is not.
+
+        Returns a dict with:
+            {'success': True,  'subscription': {...}}  – upgrade complete
+            {'success': False, 'error':         '...'}  – rollback occurred
+
+        Requires: migrations/org_fixes.sql to have been applied.
+        """
+        try:
+            result = self.client.rpc(
+                "upgrade_org_tier_atomic",
+                {
+                    "p_organization_id": organization_id,
+                    "p_new_tier":        new_tier,
+                    "p_seats":           seats,
+                    "p_price_per_seat":  price_per_seat,
+                }
+            ).execute()
+            return result.data if result.data else {"success": False, "error": "No data returned"}
+        except Exception as e:
+            logger.error(f"Error in upgrade_org_tier_atomic: {e}")
+            return {"success": False, "error": str(e)}
+
     def execute_query(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """
-        Execute a raw SQL query using Supabase RPC.
-        Note: This requires creating a custom RPC function in Supabase.
-        For now, this is a placeholder for compatibility with organization_manager.
+        Raw SQL execution — NOT SUPPORTED via the Supabase REST client.
+
+        This method exists only for backwards compatibility with OrganizationManager
+        methods that have not yet been migrated to use specific ORM methods or RPC
+        calls. Calling it logs a warning and returns an empty list so the app
+        continues to function; it does NOT execute the supplied query.
+
+        If you need to run a query not covered by an existing DatabaseManager
+        method, either:
+          (a) Add a new named method to DatabaseManager, or
+          (b) Create a Postgres function and call it via self.client.rpc(...)
         """
-        logger.warning("execute_query called but not fully implemented. Use specific methods instead.")
+        logger.warning(
+            "execute_query() called with raw SQL — this is a no-op on the Supabase "
+            "client. The query was NOT executed. Migrate the caller to a named "
+            f"DatabaseManager method or an RPC call. Query: {query[:120]!r}"
+        )
         return []
+
     
     # =========================================================================
     # UTILITY METHODS

@@ -860,13 +860,15 @@ def render_new_matter_modal():
                     can_generate, reason = sub_manager.can_generate_document(user_id)
                     
                     if not can_generate:
+                        from auth import get_session_param
+                        session_param = get_session_param()
                         st.error(f"⚠️ Cannot generate document: {reason}")
-                        st.markdown("""
+                        st.markdown(f"""
                         <div style="background-color: rgba(255, 75, 75, 0.1); border: 1px solid rgba(255, 75, 75, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                             <p style="margin: 0; color: #ff6b6b; font-size: 14px;">
                                 Please upgrade your plan or add more seats to continue.
                             </p>
-                            <a href="?view=pricing" target="_self" style="display: inline-block; margin-top: 10px; background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: 500;">
+                            <a href="?view=pricing{session_param}" target="_self" style="display: inline-block; margin-top: 10px; background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: 500;">
                                 View Pricing Options
                             </a>
                         </div>
@@ -943,7 +945,8 @@ def render_new_matter_modal():
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                        from error_helpers import show_error
+                        show_error(e, "matter")
 
     modal_content()
 

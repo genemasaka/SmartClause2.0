@@ -15,7 +15,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mpesa_handler import MpesaHandler
 from database import DatabaseManager
-from subscription_manager import SubscriptionManager, PRICING
+from subscription_manager import (
+    SubscriptionManager, PRICING,
+    INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +57,28 @@ class PaymentFlowManager:
                     "message": "Invalid subscription tier"
                 }
 
-            price_per_seat = tier_config["amount"]
-            
-            if tier == "individual":
-                seats = 1 # Force 1 seat for individual
-                amount = price_per_seat
+            # PRICING amounts are stored in minor units (KSh × 100)
+            # e.g. 650000 = KES 6,500.  Divide by 100 to get actual KES.
+            price_per_seat_kes = tier_config["amount"] // 100
+
+            if tier == INDIVIDUAL_TIER:
+                seats = 1  # Force 1 seat for individual
+                amount = price_per_seat_kes
+            elif tier == TEAM_TIER:
+                min_seats = tier_config.get("min_seats", 3)
+                seats = max(seats, min_seats)  # Enforce minimum
+                amount = price_per_seat_kes * seats
+            elif tier == ENTERPRISE_TIER:
+                min_seats = tier_config.get("min_seats", 10)
+                seats = max(seats, min_seats)  # Enforce minimum
+                amount = price_per_seat_kes * seats
             else:
-                 amount = price_per_seat * seats
+                amount = price_per_seat_kes * seats
+
+            logger.info(
+                f"Payment amount calculated: {tier} x {seats} seats = "
+                f"KES {amount:,} (price_per_seat=KES {price_per_seat_kes:,})"
+            )
             
             # Hash phone number for privacy
             phone_hash = self.mpesa.encryptor.hash_data(phone_number)
@@ -77,10 +96,10 @@ class PaymentFlowManager:
                 checkout_request_id = response.get("CheckoutRequestID")
                 
                 # Create payment transaction record with metadata
-                self.db.create_payment_transaction(
+                tx = self.db.create_payment_transaction(
                     user_id=user_id,
                     amount=amount,
-                    transaction_type="organization_subscription",
+                    transaction_type="subscription",  # Changed from "organization_subscription" to match DB constraint
                     checkout_request_id=checkout_request_id,
                     phone_number_hash=phone_hash,
                     credits_purchased=0,
@@ -88,6 +107,13 @@ class PaymentFlowManager:
                     seats=seats,
                     tier=tier
                 )
+                
+                if not tx:
+                    logger.error(f"Failed to create payment transaction record in database for {checkout_request_id}")
+                    return {
+                        "success": False,
+                        "message": "Payment system initialization failed. Please try again."
+                    }
                 
                 logger.info(f"Organization subscription purchase initiated for org {organization_id}, tier {tier}, seats {seats}")
                 
@@ -167,53 +193,85 @@ class PaymentFlowManager:
                             receipt_number=receipt_number
                         )
                         
-                        # Process payment based on transaction type
+                        # Process payment — supporting both 'subscription' (standard) and legacy types if needed
                         transaction_type = transaction.get("transaction_type")
-                        credits_purchased = transaction.get("credits_purchased", 0)
-                        
-                        if transaction_type == "credit_purchase":
-                            # Add credits to user account
-                            self.subscription_mgr.add_credits(user_id, credits_purchased)
-                            logger.info(f"Added {credits_purchased} credits to user {user_id}")
+
+                        if transaction_type in ["subscription", "organization_subscription"]:
+                            metadata = transaction.get("metadata") or {}
+                            organization_id = metadata.get("organization_id")
+                            seats = int(metadata.get("seats", 1))
+                            tier = metadata.get("tier", "individual")
+
+                            if not organization_id:
+                                logger.error(
+                                    f"organization_subscription missing organization_id "
+                                    f"in metadata for tx {checkout_request_id}"
+                                )
+                                return {
+                                    "success": False,
+                                    "message": "Payment recorded but subscription activation failed. "
+                                               "Please contact support."
+                                }
+
+                            # Activate subscription via SubscriptionManager
+                            upgraded = self.subscription_mgr.upgrade_to_tier(
+                                user_id=user_id,
+                                new_tier=tier,
+                                seats=seats
+                            )
+
+                            if upgraded:
+                                logger.info(
+                                    f"Activated {tier} subscription for org "
+                                    f"{organization_id} ({seats} seats)"
+                                )
+                                return {
+                                    "success": True,
+                                    "message": f"Payment successful! {tier.title()} plan is now active.",
+                                    "tier": tier
+                                }
+                            else:
+                                logger.error(
+                                    f"upgrade_to_tier failed for org {organization_id} "
+                                    f"after successful payment {checkout_request_id}"
+                                )
+                                return {
+                                    "success": False,
+                                    "message": "Payment received but subscription activation failed. "
+                                               "Please contact support with receipt number: "
+                                               f"{receipt_number}"
+                                }
+
+                        elif transaction_type == "credit_purchase":
+                            credits = transaction.get("credits_purchased") or 0
                             
+                            # Update user's credit balance
+                            updated_sub = self.db.update_subscription_credits(user_id, credits)
+                            
+                            if updated_sub:
+                                logger.info(f"Added {credits} credits for user {user_id}")
+                                return {
+                                    "success": True,
+                                    "credits_added": credits,
+                                    "message": f"Payment successful! {credits} credits have been added to your account."
+                                }
+                            else:
+                                logger.error(f"Failed to update credits for user {user_id} after payment {checkout_request_id}")
+                                return {
+                                    "success": False,
+                                    "message": "Payment received but credits update failed. Please contact support."
+                                }
+
+                        else:
+                            # Unknown transaction type — log and return a safe error
+                            logger.error(
+                                f"Unknown transaction_type '{transaction_type}' for "
+                                f"checkout {checkout_request_id}"
+                            )
                             return {
-                                "success": True,
-                                "message": f"Payment successful! {credits_purchased} credit(s) added.",
-                                "credits_added": credits_purchased
+                                "success": False,
+                                "message": "Unrecognized payment type. Please contact support."
                             }
-                            
-                        elif transaction_type == "subscription":
-                            # Upgrade to Standard tier
-                            end_date = (datetime.now() + timedelta(days=30)).isoformat()
-                            self.subscription_mgr.upgrade_to_standard(user_id, end_date)
-                            logger.info(f"Upgraded user {user_id} to Standard tier")
-                            
-                            return {
-                                "success": True,
-                                "message": "Payment successful! You now have Standard access.",
-                                "subscription_end_date": end_date
-                            }
-                        
-                        elif transaction_type == "organization_subscription":
-                             # Create organization subscription
-                             organization_id = transaction.get("metadata", {}).get("organization_id")
-                             seats = transaction.get("metadata", {}).get("seats", 1)
-                             tier = transaction.get("metadata", {}).get("tier", "individual")
-                             
-                             if organization_id:
-                                 self.db.create_organization_subscription(
-                                     organization_id=organization_id,
-                                     subscription_tier=tier,
-                                     seats_purchased=seats,
-                                     price_per_seat=int(transaction.get("amount", 0) / seats) if seats > 0 else 0
-                                 )
-                                 logger.info(f"Activated {tier} subscription for organization {organization_id}")
-                                 
-                                 return {
-                                     "success": True,
-                                     "message": f"Payment successful! {tier.title()} subscription active.",
-                                     "tier": tier
-                                 }
                     
                     elif result_code in ["1032", "1037", "1"]:
                         # Payment failed or cancelled

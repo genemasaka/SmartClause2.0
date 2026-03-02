@@ -1,5 +1,6 @@
 # auth.py - TRULY PERSISTENT SESSION (COOKIE-BASED)
 import streamlit as st
+from error_helpers import show_error
 from supabase import create_client
 import os
 from dotenv import load_dotenv
@@ -215,6 +216,133 @@ def login_page():
     # Initialize view state
     if "auth_view" not in st.session_state:
         st.session_state["auth_view"] = "login"
+
+    # ── Supabase recovery-link handler ───────────────────────────────────────
+    # Supabase emails put the session in the URL hash (#access_token=...&type=recovery).
+    # Python (server-side) cannot read hash fragments.
+    #
+    # Two-phase approach:
+    #   Phase 1: Supabase redirects here with ?type=recovery  (Python CAN see this)
+    #            → show a bridge page whose JS reads the hash and submits a form
+    #              with a user click (user-activation satisfies sandbox policy).
+    #   Phase 2: Form posts to /?sc_type=recovery&sc_token=TOKEN (Python CAN see this)
+    #            → show the real "Set New Password" form.
+    #
+    # Phase 2 detection (arrived via the bridge form submit):
+    if st.query_params.get("sc_type") == "recovery" and st.query_params.get("sc_token"):
+        st.session_state["auth_view"] = "reset_password"
+        st.session_state["reset_access_token"] = st.query_params["sc_token"]
+
+    # Phase 1 detection (landed directly from Supabase email link):
+    elif st.query_params.get("type") == "recovery" and st.session_state["auth_view"] != "reset_password":
+        # Render ONLY the bridge — skip all other UI for this run.
+        # First hide all Streamlit chrome so the bridge fills the screen.
+        st.markdown("""
+        <style>
+        #MainMenu, header, footer, [data-testid="stToolbar"],
+        [data-testid="stSidebar"], [data-testid="collapsedControl"],
+        [data-testid="stDecoration"] { display: none !important; }
+        .stApp, .main, .block-container, [data-testid="stAppViewContainer"] {
+            background: #000 !important;
+            padding: 0 !important; margin: 0 !important;
+            max-width: 100% !important; width: 100vw !important;
+        }
+        iframe { border: none !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        import streamlit.components.v1 as components
+        components.html(f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+          * {{ box-sizing: border-box; margin:0; padding:0; }}
+          html, body {{
+            width:100%; height:100%;
+            background:#000;
+            display:flex; align-items:center; justify-content:center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          }}
+          .card {{
+            background:#111; border:1px solid #1f1f1f; border-radius:16px;
+            padding:48px 40px; text-align:center; max-width:420px; width:90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,.6);
+          }}
+          .logo {{ font-size:28px; margin-bottom:16px; }}
+          h2 {{ color:#fff; margin:0 0 10px; font-size:22px; font-weight:700; }}
+          p  {{ color:#9CA3AF; margin:0 0 28px; font-size:14px; line-height:1.6; }}
+          button {{
+            background: linear-gradient(135deg,#4B9EFF 0%,#3B7DD1 100%);
+            color:#fff; border:none; border-radius:8px;
+            padding:14px 0; font-size:15px; font-weight:600;
+            cursor:pointer; width:100%; transition: opacity .2s;
+          }}
+          button:hover:not(:disabled) {{ opacity:.88; }}
+          button:disabled {{ opacity:.45; cursor:default; }}
+          .err {{ color:#f87171; margin-top:16px; font-size:13px; display:none; line-height:1.5; }}
+        </style>
+        </head>
+        <body>
+        <div class="card">
+          <div class="logo">🔐</div>
+          <h2>Reset Your Password</h2>
+          <p>Your reset link was verified.<br>Click below to set a new password.</p>
+          <form id="rf" method="GET" target="_top" action="http://localhost:8501/">
+            <input type="hidden" name="sc_type" value="recovery">
+            <input type="hidden" name="sc_token" id="tk" value="">
+            <button type="submit" id="btn" disabled>Loading…</button>
+          </form>
+          <div class="err" id="err">
+            Could not read the reset token from the URL.<br>
+            Please request a new password reset link.
+          </div>
+        </div>
+        <script>
+        (function() {{
+          try {{
+            // Read hash from parent page (allowed - same origin + allow-same-origin sandbox)
+            var hash = '';
+            try {{ hash = window.parent.location.hash; }} catch(e) {{}}
+            if (!hash) hash = window.location.hash;
+
+            var params = {{}};
+            (hash || '').replace(/^#/, '').split('&').forEach(function(pair) {{
+              var idx = pair.indexOf('=');
+              if (idx > -1) {{
+                try {{
+                  params[decodeURIComponent(pair.slice(0, idx))] =
+                    decodeURIComponent(pair.slice(idx + 1));
+                }} catch(e) {{}}
+              }}
+            }});
+
+            var token = params['access_token'];
+            if (token) {{
+              // Update form action to the app's real base URL
+              try {{
+                var appBase = window.parent.location.origin + '/';
+                document.getElementById('rf').action = appBase;
+              }} catch(e) {{}}
+              document.getElementById('tk').value = token;
+              var btn = document.getElementById('btn');
+              btn.disabled = false;
+              btn.textContent = 'Continue to Reset Password →';
+            }} else {{
+              document.getElementById('btn').style.display = 'none';
+              document.getElementById('err').style.display = 'block';
+            }}
+          }} catch(e) {{
+            document.getElementById('btn').style.display = 'none';
+            document.getElementById('err').style.display = 'block';
+          }}
+        }})();
+        </script>
+        </body>
+        </html>
+        """, height=600, scrolling=False)
+        st.stop()   # Don't render anything else while bridge is shown
+
     
     # Add custom CSS for the modern split-screen layout
     st.markdown("""
@@ -477,9 +605,46 @@ def login_page():
             color: #60A5FA !important;
         }
         
+        /* Forgot password link */
+        .forgot-password-btn > button {
+            background: transparent !important;
+            border: none !important;
+            color: #60A5FA !important;
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            width: auto !important;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .forgot-password-btn > button:hover {
+            background: transparent !important;
+            box-shadow: none !important;
+            transform: none !important;
+            color: #93C5FD !important;
+        }
+        
         /* Reset gap */
         [data-testid="stHorizontalBlock"] {
             gap: 0 !important;
+        }
+        
+        /* Privacy & Terms notice */
+        .auth-privacy-notice {
+            text-align: center;
+            font-size: 12px;
+            color: #6B7280;
+            margin-top: 16px;
+            line-height: 1.6;
+        }
+        .auth-privacy-notice a {
+            color: #60A5FA;
+            text-decoration: none;
+        }
+        .auth-privacy-notice a:hover {
+            text-decoration: underline;
         }
     </style>
     
@@ -557,7 +722,14 @@ def login_page():
                                 st.error("Invalid credentials")
                             
                         except Exception as e:
-                            st.error(f"Login failed: {str(e)}")
+                            show_error(e, "login")
+            
+            # Forgot password link
+            st.markdown('<div class="forgot-password-btn">', unsafe_allow_html=True)
+            if st.button("Forgot your password?", key="forgot_password_link"):
+                st.session_state["auth_view"] = "forgot_password"
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # Toggle to signup
             st.markdown("""
@@ -570,9 +742,99 @@ def login_page():
             if st.button("Create new account", key="switch_to_signup"):
                 st.session_state["auth_view"] = "signup"
                 st.rerun()
+            
+            # Privacy & Terms notice (passive)
+            st.markdown("""
+            <div class="auth-privacy-notice">
+                By signing in, you agree to our
+                <a href="?view=terms" target="_self">Terms of Use</a> and
+                <a href="?view=privacy" target="_self">Privacy Policy</a>.
+            </div>
+            """, unsafe_allow_html=True)
+        
+        elif st.session_state["auth_view"] == "forgot_password":
+            # ── Forgot Password Form ──────────────────────────────────────────
+            st.markdown("""
+            <div class="auth-title">Reset Password</div>
+            <div class="auth-subtitle">Enter your account email and we'll send you a link to reset your password.</div>
+            """, unsafe_allow_html=True)
+            
+            with st.form("forgot_password_form", clear_on_submit=False):
+                reset_email = st.text_input("Your email", key="forgot_email")
+                send_btn = st.form_submit_button("Send Reset Link", type="primary", use_container_width=True)
+                
+                if send_btn:
+                    if not reset_email:
+                        st.error("Please enter your email address.")
+                    else:
+                        try:
+                            supabase = get_supabase_client()
+                            supabase.auth.reset_password_for_email(
+                                reset_email,
+                                options={
+                                    "redirect_to": os.getenv("APP_URL", "http://localhost:8501") + "?type=recovery"
+                                }
+                            )
+                            st.success("✅ If that email is registered, you'll receive a reset link shortly. Check your inbox (and spam folder).")
+                        except Exception as e:
+                            show_error(e, "password reset")
+            
+            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+            if st.button("← Back to login", key="back_to_login_from_forgot"):
+                st.session_state["auth_view"] = "login"
+                st.rerun()
+        
+        elif st.session_state["auth_view"] == "reset_password":
+            # ── Reset Password Form (arrived via email deep-link) ─────────────
+            st.markdown("""
+            <div class="auth-title">Set New Password</div>
+            <div class="auth-subtitle">Choose a strong new password for your account.</div>
+            """, unsafe_allow_html=True)
+            
+            access_token = st.session_state.get("reset_access_token", "")
+            
+            with st.form("reset_password_form", clear_on_submit=False):
+                new_password = st.text_input("New password", type="password", key="reset_new_pw")
+                confirm_password = st.text_input("Confirm new password", type="password", key="reset_confirm_pw")
+                update_btn = st.form_submit_button("Update Password", type="primary", use_container_width=True)
+                
+                if update_btn:
+                    if not new_password or not confirm_password:
+                        st.error("Please fill in both fields.")
+                    elif new_password != confirm_password:
+                        st.error("Passwords don't match.")
+                    elif len(new_password) < 6:
+                        st.error("Password must be at least 6 characters.")
+                    elif not access_token:
+                        st.error("Invalid or expired reset link. Please request a new one.")
+                    else:
+                        try:
+                            supabase = get_supabase_client()
+                            # Set the recovery session so we can call update_user
+                            supabase.auth.set_session(access_token, "")
+                            supabase.auth.update_user({"password": new_password})
+                            st.success("✅ Password updated successfully! You can now sign in with your new password.")
+                            # Clear recovery token and redirect to login
+                            st.session_state.pop("reset_access_token", None)
+                            time.sleep(1.5)
+                            st.session_state["auth_view"] = "login"
+                            # Clear recovery query params
+                            if "type" in st.query_params:
+                                del st.query_params["type"]
+                            if "access_token" in st.query_params:
+                                del st.query_params["access_token"]
+                            st.rerun()
+                        except Exception as e:
+                            show_error(e, "password update")
+            
+            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+            if st.button("← Back to login", key="back_to_login_from_reset"):
+                st.session_state.pop("reset_access_token", None)
+                st.session_state["auth_view"] = "login"
+                st.rerun()
         
         else:
-            # Signup Form
+            # ── Signup Form ───────────────────────────────────────────────────
             st.markdown("""
             <div class="auth-title">Create an account</div>
             """, unsafe_allow_html=True)
@@ -582,11 +844,17 @@ def login_page():
                 email_signup = st.text_input("Your email", key="signup_email")
                 password_signup = st.text_input("Password", type="password", key="signup_password")
                 password_confirm = st.text_input("Confirm Password", type="password", key="signup_confirm")
+                agree_terms = st.checkbox(
+                    "I agree to the Terms of Use and Privacy Policy",
+                    key="signup_agree_terms"
+                )
                 submit = st.form_submit_button("Get Started", type="primary", use_container_width=True)
                 
                 if submit:
                     if not email_signup or not password_signup:
                         st.error("Please fill in all fields")
+                    elif not agree_terms:
+                        st.error("You must accept the Terms of Use and Privacy Policy to create an account.")
                     elif password_signup != password_confirm:
                         st.error("Passwords don't match!")
                     elif len(password_signup) < 6:
@@ -653,20 +921,10 @@ def login_page():
                                 st.error(f"Sign up failed: {error_msg}")
                             
                         except Exception as e:
-                            error_details = str(e)
-                            st.error(f"❌ Sign up failed: {error_details}")
+                            show_error(e, "signup")
                             
-                            if "email" in error_details.lower():
-                                st.info("💡 This email may already be registered. Try logging in instead.")
-                            elif "password" in error_details.lower():
-                                st.info("💡 Password must be at least 6 characters long.")
-                            elif "network" in error_details.lower() or "connection" in error_details.lower():
-                                st.info("💡 Network error. Please check your internet connection.")
-                            else:
-                                st.info("💡 If the problem persists, please contact support.")
-                            
-                            import traceback
-                            print(f"Sign up error: {traceback.format_exc()}")
+                            import logging
+                            logging.getLogger(__name__).error(f"Sign up error: {e}", exc_info=True)
             
             # Toggle to login
             st.markdown("""
@@ -679,6 +937,15 @@ def login_page():
             if st.button("Back to login", key="switch_to_login"):
                 st.session_state["auth_view"] = "login"
                 st.rerun()
+            
+            # Privacy & Terms notice (passive)
+            st.markdown("""
+            <div class="auth-privacy-notice">
+                By creating an account, you agree to our
+                <a href="?view=terms" target="_self">Terms of Use</a> and
+                <a href="?view=privacy" target="_self">Privacy Policy</a>.
+            </div>
+            """, unsafe_allow_html=True)
 
 
 
@@ -742,15 +1009,32 @@ def update_query_params(params: dict):
     # 1. Get current session cookie
     cookie = get_session_cookie()
     
-    # 2. Clear existing params to ensure clean state
-    # (Streamlit 1.30+ behavior: assignment replaces)
+    # 2. Prepare new params
     new_params = params.copy()
     
-    # 3. Inject session cookie if it exists
-    if cookie:
+    # 3. Inject session cookie if it exists and not already in params
+    if cookie and "session" not in new_params:
         new_params["session"] = cookie
         
     # 4. Update the actual query params
-    # Using st.query_params.clear() then update() ensures we remove old params
-    st.query_params.clear()
-    st.query_params.update(new_params)
+    # In newer Streamlit, we can just clear and update
+    try:
+        st.query_params.clear()
+        for k, v in new_params.items():
+            if v is not None:
+                st.query_params[k] = v
+    except Exception:
+        # Fallback for older versions or edge cases
+        for k, v in new_params.items():
+            st.query_params[k] = v
+
+
+def get_session_param() -> str:
+    """
+    Helper for HTML links to preserve session.
+    Returns '&session=XYZ' or '?session=XYZ' or empty string.
+    """
+    cookie = get_session_cookie()
+    if not cookie:
+        return ""
+    return f"&session={cookie}"

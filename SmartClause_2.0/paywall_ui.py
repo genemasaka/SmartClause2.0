@@ -1,282 +1,266 @@
 """
 Paywall UI Components for SmartClause
-Streamlit components for pricing, paywalls, and payment modals
+Streamlit components for subscription status, paywall gates, and upgrade prompts.
+
+Updated to use the current organization-based subscription model:
+  Tiers: trial → individual → team → enterprise
 """
 
 import streamlit as st
 from typing import Optional, Dict, Any
-from subscription_manager import PRICING, SINGLE_CREDIT_TIER, PAY_AS_YOU_GO_TIER, STANDARD_TIER
-
-def render_pricing_cards():
-    """
-    Display pricing tiers in a 3-column layout.
-    Returns the selected tier or None.
-    """
-    st.markdown("### 💳 Choose Your Plan")
-    st.markdown("---")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    # Individual Tier
-    with col1:
-        st.markdown("""
-        <div style='border: 2px solid #4ADE80; border-radius: 10px; padding: 20px; text-align: center; background-color: #1A1D24;'>
-            <h3 style='color: #4ADE80;'>👤 Individual</h3>
-            <h2 style='color: #FFFFFF;'>KES 8,500</h2>
-            <p style='color: #9BA1B0;'>Per Month</p>
-            <hr style='border-color: #252930;'>
-            <p style='text-align: left; font-size: 14px; color: #FFFFFF;'>
-                ✅ 50 documents/month<br>
-                ✅ Full Document Editor<br>
-                ✅ Clause Library<br>
-            </p>
-            <p style='color: #9BA1B0; font-size: 12px;'>Perfect for solo practitioners</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("Get Individual", key="buy_individual_modal", use_container_width=True):
-             from subscription_manager import INDIVIDUAL_TIER
-             return INDIVIDUAL_TIER
-    
-    # Team Tier
-    with col2:
-        st.markdown("""
-        <div style='border: 3px solid #F59E0B; border-radius: 10px; padding: 20px; text-align: center; background-color: #1A1D24;'>
-            <div style='background-color: #F59E0B; color: #000; padding: 5px; margin: -20px -20px 10px -20px; border-radius: 8px 8px 0 0;'>
-                <strong>⭐ BEST VALUE</strong>
-            </div>
-            <h3 style='color: #F59E0B;'>👥 Team</h3>
-            <h2 style='color: #FFFFFF;'>KES 6,500</h2>
-            <p style='color: #9BA1B0;'>Per User / Month</p>
-            <hr style='border-color: #252930;'>
-            <p style='text-align: left; font-size: 14px; color: #FFFFFF;'>
-                ✅ 100 documents/user/mo<br>
-                ✅ Admin Dashboard<br>
-                ✅ Team Features<br>
-            </p>
-            <p style='color: #9BA1B0; font-size: 12px;'>Ideal for small law firms</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("Get Team", key="buy_team_modal", use_container_width=True):
-            from subscription_manager import TEAM_TIER
-            return TEAM_TIER
-    
-    # Enterprise Tier
-    with col3:
-        st.markdown("""
-        <div style='border: 2px solid #4B9EFF; border-radius: 10px; padding: 20px; text-align: center; background-color: #1A1D24;'>
-            <h3 style='color: #4B9EFF;'>🏢 Enterprise</h3>
-            <h2 style='color: #FFFFFF;'>KES 5,000</h2>
-            <p style='color: #9BA1B0;'>Per User / Month</p>
-            <hr style='border-color: #252930;'>
-            <p style='text-align: left; font-size: 14px; color: #FFFFFF;'>
-                ✅ Unlimited documents<br>
-                ✅ SSO & API Access<br>
-                ✅ Dedicated Support<br>
-            </p>
-            <p style='color: #9BA1B0; font-size: 12px;'>For enterprise teams</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("Contact Sales", key="buy_enterprise_modal", use_container_width=True):
-            from subscription_manager import ENTERPRISE_TIER
-            return ENTERPRISE_TIER
-            
-    return None
+from subscription_manager import (
+    PRICING,
+    TRIAL_TIER, INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER,
+    FEATURES,
+)
 
 
-def render_paywall_modal(reason: str, current_tier: str):
-    """
-    Display a paywall modal when user hits a restriction.
-    
-    Args:
-        reason: Why the paywall is shown (e.g., "no_credits", "editor_locked")
-        current_tier: User's current subscription tier
-    """
-    if reason == "no_credits":
-        st.warning("⚠️ You've run out of credits!")
-        st.markdown("""
-        You need credits to generate documents. Choose a plan below to continue:
-        """)
-        
-    elif reason == "editor_locked":
-        st.warning("🔒 Document Editor is locked")
-        st.markdown("""
-        The Document Editor is available on the **Individual** plan and higher.
-        Upgrade to access full editing capabilities.
-        """)
-        
-    elif reason == "library_locked":
-        st.warning("🔒 Clause Library is locked")
-        st.markdown("""
-        The Clause Library is available on the **Individual** plan and higher.
-        Upgrade to create and manage custom clauses.
-        """)
-    
-    # Show pricing options
-    selected_tier = render_pricing_cards()
-    return selected_tier
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier display helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TIER_META = {
+    TRIAL_TIER: {
+        "label": "Free Trial",
+        "color": "#9BA1B0",
+        "icon": "⏳",
+        "next_tier": INDIVIDUAL_TIER,
+        "next_label": "Individual",
+    },
+    INDIVIDUAL_TIER: {
+        "label": "Individual",
+        "color": "#4ADE80",
+        "icon": "👤",
+        "next_tier": TEAM_TIER,
+        "next_label": "Team",
+    },
+    TEAM_TIER: {
+        "label": "Team",
+        "color": "#F59E0B",
+        "icon": "👥",
+        "next_tier": ENTERPRISE_TIER,
+        "next_label": "Enterprise",
+    },
+    ENTERPRISE_TIER: {
+        "label": "Enterprise",
+        "color": "#4B9EFF",
+        "icon": "🏢",
+        "next_tier": None,
+        "next_label": None,
+    },
+}
+
+_FEATURE_LABELS = {
+    "document_editor": "Document Editor",
+    "clause_library": "Clause Library",
+    "admin_dashboard": "Admin Dashboard",
+    "custom_templates": "Custom Templates",
+    "priority_support": "Priority Support",
+    "sso": "SSO Integration",
+    "api_access": "API Access",
+    "ai_chatbot": "AI Chatbot",
+}
 
 
-def render_payment_modal(payment_type: str, tier: str) -> Optional[str]:
-    """
-    Display payment modal with phone number input.
-    
-    Args:
-        payment_type: "credit_purchase" or "subscription"
-        tier: The tier being purchased
-        
-    Returns:
-        Phone number if submitted, None otherwise
-    """
-    pricing = PRICING[tier]
-    amount = pricing["amount"]
-    tier_name = pricing["name"]
-    
-    st.markdown(f"### 💳 Complete Payment - {tier_name}")
-    st.markdown(f"**Amount:** KES {amount:,}")
-    
-    if tier in [TESTER_TIER, PAY_AS_YOU_GO_TIER]:
-        st.markdown(f"**Credits:** {pricing['credits']}")
-    else:
-        st.markdown("**Duration:** 30 days")
-    
-    st.markdown("---")
-    
-    with st.form("payment_form"):
-        st.markdown("**Enter your M-Pesa phone number:**")
-        phone_number = st.text_input(
-            "Phone Number",
-            placeholder="254XXXXXXXXX or 07XXXXXXXX",
-            help="Enter your Safaricom phone number to receive the payment prompt"
-        )
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            submit = st.form_submit_button("Pay Now", use_container_width=True)
-        with col2:
-            cancel = st.form_submit_button("Cancel", use_container_width=True)
-        
-        if submit and phone_number:
-            return phone_number
-        elif cancel:
-            return "CANCEL"
-    
-    return None
+def _tier_meta(tier: str) -> Dict[str, Any]:
+    """Return display metadata for a tier, with safe fallback."""
+    return _TIER_META.get(tier, {"label": tier.title(), "color": "#9BA1B0", "icon": "📋", "next_tier": None, "next_label": None})
 
 
-def render_credit_balance(credits: int, tier: str):
-    """
-    Display credit balance indicator for credit-based tiers.
-    
-    Args:
-        credits: Number of remaining credits
-        tier: User's tier
-    """
-    if tier in [SINGLE_CREDIT_TIER, PAY_AS_YOU_GO_TIER]:
-        # Color based on credit level
-        if credits == 0:
-            color = "#f44336"  # Red
-            icon = "⚠️"
-        elif credits <= 2:
-            color = "#FF9800"  # Orange
-            icon = "⚡"
-        else:
-            color = "#4CAF50"  # Green
-            icon = "✅"
-        
-        st.markdown(f"""
-        <div style='background-color: {color}; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px;'>
-            <strong>{icon} Credits: {credits}</strong>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if credits == 0:
-            if st.button("🛒 Buy More Credits", key="buy_credits_sidebar", use_container_width=True):
-                st.session_state.show_pricing = True
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Subscription status badge (for sidebar / header)
+# ─────────────────────────────────────────────────────────────────────────────
 
 def render_subscription_status(subscription_data: Dict[str, Any]):
     """
-    Display subscription status in sidebar.
-    
+    Display a compact subscription status badge.
+
     Args:
-        subscription_data: Dict with tier, credits, expiry_date, etc.
+        subscription_data: Dict returned by SubscriptionManager.get_user_status()
     """
-    tier = subscription_data.get("tier", TESTER_TIER)
-    credits = subscription_data.get("credits", 0)
+    tier = subscription_data.get("tier", TRIAL_TIER)
     is_active = subscription_data.get("is_active", True)
     days_remaining = subscription_data.get("days_remaining")
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📊 Subscription Status")
-    
-    # Tier display
-    tier_names = {
-        SINGLE_CREDIT_TIER: "🧪 Single Credit",
-        PAY_AS_YOU_GO_TIER: "📄 Pay-As-You-Go",
-        STANDARD_TIER: "🏢 Standard"
-    }
-    
-    tier_display = tier_names.get(tier, tier)
-    st.sidebar.markdown(f"**Plan:** {tier_display}")
-    
-    # Credit balance for credit-based tiers
-    if tier in [SINGLE_CREDIT_TIER, PAY_AS_YOU_GO_TIER]:
-        render_credit_balance(credits, tier)
-    
-    # Subscription expiry for Standard tier
-    elif tier == STANDARD_TIER:
-        if is_active and days_remaining is not None:
-            if days_remaining <= 3:
-                st.sidebar.warning(f"⚠️ Expires in {days_remaining} days")
-            else:
-                st.sidebar.success(f"✅ Active ({days_remaining} days left)")
-        elif not is_active:
-            st.sidebar.error("❌ Subscription Expired")
-            if st.sidebar.button("🔄 Renew Subscription", use_container_width=True):
-                st.session_state.show_pricing = True
-    
-    # Upgrade button for non-Standard users
-    if tier != STANDARD_TIER:
-        st.sidebar.markdown("---")
-        if st.sidebar.button("⬆️ Upgrade to Standard", key="upgrade_sidebar", use_container_width=True):
-            st.session_state.show_pricing = True
+    documents_remaining = subscription_data.get("documents_remaining")
 
+    meta = _tier_meta(tier)
+    color = meta["color"] if is_active else "#EF4444"
+    label = meta["label"]
+    icon = meta["icon"]
 
-def show_payment_verification_spinner(message: str = "Verifying payment..."):
-    """
-    Display a spinner during payment verification.
-    
-    Args:
-        message: Message to display
-    """
-    with st.spinner(message):
-        import time
-        time.sleep(1)  # Visual feedback
-
-
-def show_payment_success(credits_added: Optional[int] = None):
-    """
-    Display success message after payment.
-    
-    Args:
-        credits_added: Number of credits added (if applicable)
-    """
-    st.balloons()
-    
-    if credits_added:
-        st.success(f"✅ Payment successful! {credits_added} credit(s) added to your account.")
+    # Build the status line
+    if not is_active:
+        status_line = "Expired — upgrade to continue"
+        status_color = "#EF4444"
+    elif tier == TRIAL_TIER:
+        if days_remaining is not None:
+            status_line = f"{days_remaining} day{'s' if days_remaining != 1 else ''} left in trial"
+        else:
+            status_line = "Trial active"
+        status_color = "#F59E0B" if (days_remaining or 99) <= 3 else "#9BA1B0"
     else:
-        st.success("✅ Payment successful! You now have full Standard access.")
+        if documents_remaining is not None:
+            status_line = f"{documents_remaining} docs remaining this month"
+        elif days_remaining is not None:
+            status_line = f"Renews in {days_remaining} day{'s' if days_remaining != 1 else ''}"
+        else:
+            status_line = "Active"
+        status_color = "#4ADE80"
+
+    st.markdown(f"""
+    <div style="
+        background: rgba(255,255,255,0.04);
+        border: 1px solid {color}33;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+    ">
+        <div style="font-size: 12px; color: #9BA1B0; margin-bottom: 2px;">Plan</div>
+        <div style="font-size: 14px; font-weight: 600; color: {color};">
+            {icon} {label}
+        </div>
+        <div style="font-size: 11px; color: {status_color}; margin-top: 4px;">
+            {status_line}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Upgrade CTA for trial / expired
+    if not is_active or tier == TRIAL_TIER:
+        if st.button("⬆️ Upgrade Plan", key="paywall_upgrade_btn", use_container_width=True):
+            st.query_params["view"] = "pricing"
+            st.rerun()
+
+    # Renewal warning for paid tiers expiring soon
+    elif days_remaining is not None and days_remaining <= 5:
+        st.warning(f"⚠️ Your {label} plan expires in {days_remaining} day(s). Renew on the Pricing page.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paywall gate — shown inside a locked feature page
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_paywall_gate(
+    feature_key: str,
+    current_tier: str,
+    is_active: bool = True,
+    page_title: Optional[str] = None,
+    page_subtitle: Optional[str] = None,
+):
+    """
+    Render a professional paywall screen when a user tries to access a locked feature.
+
+    Args:
+        feature_key:   Feature identifier (e.g. "clause_library").
+        current_tier:  User's current tier string.
+        is_active:     Whether their subscription is active.
+        page_title:    Optional heading override.
+        page_subtitle: Optional subtitle override.
+    """
+    feature_label = _FEATURE_LABELS.get(feature_key, feature_key.replace("_", " ").title())
+    allowed_tiers = FEATURES.get(feature_key, [])
+
+    # Determine the *minimum* tier that unlocks the feature
+    tier_order = [TRIAL_TIER, INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER]
+    min_tier = next((t for t in tier_order if t in allowed_tiers), INDIVIDUAL_TIER)
+    min_tier_meta = _tier_meta(min_tier)
+
+    title = page_title or f"{feature_label} — Upgrade Required"
+    subtitle = page_subtitle or (
+        f"This feature is available from the **{min_tier_meta['label']}** plan and above."
+    )
+
+    if not is_active and current_tier != TRIAL_TIER:
+        # Subscription lapsed — different message
+        current_meta = _tier_meta(current_tier)
+        headline = f"Your {current_meta['label']} plan has expired"
+        body = "Renew your subscription to regain access to this feature."
+    else:
+        headline = title
+        body = subtitle
+
+    st.markdown(f"""
+    <div style="
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 48px 40px;
+        text-align: center;
+        margin-top: 16px;
+    ">
+        <div style="
+            width: 56px; height: 56px;
+            background: rgba(75,158,255,0.12);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 26px;
+        ">🔒</div>
+        <h2 style="color: #FFFFFF; font-size: 22px; margin-bottom: 10px;">{headline}</h2>
+        <p style="color: #9BA1B0; font-size: 15px; max-width: 480px; margin: 0 auto 28px; line-height: 1.6;">
+            {body}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+
+    col_l, col_btn, col_r = st.columns([1, 2, 1])
+    with col_btn:
+        if st.button(
+            f"View Plans →",
+            key=f"paywall_goto_pricing_{feature_key}",
+            use_container_width=True,
+            type="primary",
+        ):
+            st.query_params["view"] = "pricing"
+            st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Document limit warning banner
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_document_limit_warning(documents_remaining: Optional[int], tier: str):
+    """
+    Show a banner when the user is close to or at their document limit.
+
+    Args:
+        documents_remaining: Number of docs remaining (None = unlimited).
+        tier: Current tier string.
+    """
+    if documents_remaining is None:
+        return  # Unlimited — no banner needed
+
+    if documents_remaining == 0:
+        st.error(
+            "📄 You've reached your monthly document limit. "
+            "[Upgrade your plan](?view=pricing) to create more documents."
+        )
+    elif documents_remaining <= 5:
+        st.warning(
+            f"⚠️ Only **{documents_remaining}** document{'s' if documents_remaining != 1 else ''} "
+            f"remaining this month. [Upgrade for more](?view=pricing)."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Payment feedback helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def show_payment_success(tier: Optional[str] = None):
+    """Display a success message after a completed payment."""
+    st.balloons()
+    tier_label = _tier_meta(tier)["label"] if tier else "new"
+    st.success(f"✅ Payment successful! Your **{tier_label}** plan is now active.")
 
 
 def show_payment_error(message: str):
-    """
-    Display error message for failed payment.
-    
-    Args:
-        message: Error message to display
-    """
-    st.error(f"❌ {message}")
+    """Display a user-friendly payment error."""
+    st.error(f"❌ Payment failed: {message}")
+    st.info("If your M-Pesa was charged, please contact support at **support@smartclause.co.ke** with your phone number.")
+
+
+def show_payment_verification_spinner(message: str = "Verifying payment…"):
+    """Convenience wrapper for a payment verification spinner."""
+    return st.spinner(message)

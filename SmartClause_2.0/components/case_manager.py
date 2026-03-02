@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, date, timedelta
 from database import DatabaseManager
 from case_manager_logic import CaseManager
+from error_helpers import show_error
 
 
 def render_case_manager(matter_id: str, matter_name: str, db: DatabaseManager):
@@ -648,7 +649,7 @@ def _render_case_modal(case: Dict[str, Any], case_mgr: CaseManager, user_id: str
              st.session_state['show_case_modal'] = False
              st.rerun()
     with col3:
-        if st.button("AI Analysis", use_container_width=True, type="primary", key="ai_analysis_modal_btn"):
+        if st.button("Case Analysis", use_container_width=True, type="primary", key="ai_analysis_modal_btn"):
             with st.spinner("Analyzing case..."):
                 import time
                 time.sleep(0.5)  # Brief delay for UX
@@ -672,7 +673,7 @@ def _render_case_modal(case: Dict[str, Any], case_mgr: CaseManager, user_id: str
         with col2:
             st.markdown(f"""
             <div style="background: rgba(75, 158, 255, 0.08); border-left: 4px solid #4B9EFF; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                <div style="font-weight: 600; color: #4B9EFF; margin-bottom: 8px; font-size: 14px;">AI Case Analysis</div>
+                <div style="font-weight: 600; color: #4B9EFF; margin-bottom: 8px; font-size: 14px;">Case Analysis</div>
                 <div style="color: #FFFFFF; margin-bottom: 12px; font-size: 14px;">{analysis.get('summary', 'No summary available')}</div>
                 <div style="display: flex; gap: 16px; font-size: 13px;">
                     <div><strong style="color: #9BA1B0;">Case Strength:</strong> <span style="color: #4B9EFF; font-weight: 600;">{strength}%</span></div>
@@ -914,9 +915,7 @@ def _render_add_event_form(case_id: str, case_mgr: CaseManager, user_id: str):
                         else:
                             st.error("❌ Failed to create event. Please try again.")
                     except Exception as e:
-                        st.error(f"❌ Error creating event: {str(e)}")
-                        import logging
-                        logging.error(f"Event creation error: {e}", exc_info=True)
+                        show_error(e, "case")
 
 
 def _render_tasks_tab(case_id: str, case_mgr: CaseManager, user_id: str):
@@ -1042,9 +1041,7 @@ def _render_add_task_form(case_id: str, case_mgr: CaseManager, user_id: str):
                         else:
                             st.error("❌ Failed to create task. Please try again.")
                     except Exception as e:
-                        st.error(f"❌ Error creating task: {str(e)}")
-                        import logging
-                        logging.error(f"Task creation error: {e}", exc_info=True)
+                        show_error(e, "case")
 
 
 def _render_notes_tab(case_id: str, case_mgr: CaseManager, user_id: str):
@@ -1079,9 +1076,7 @@ def _render_notes_tab(case_id: str, case_mgr: CaseManager, user_id: str):
                     else:
                         st.error("❌ Failed to add note. Please try again.")
                 except Exception as e:
-                    st.error(f"❌ Error adding note: {str(e)}")
-                    import logging
-                    logging.error(f"Note creation error: {e}", exc_info=True)
+                    show_error(e, "case")
     
     st.markdown("<div style='margin: 24px 0;'></div>", unsafe_allow_html=True)
     
