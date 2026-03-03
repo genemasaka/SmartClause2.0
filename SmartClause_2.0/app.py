@@ -259,6 +259,10 @@ view = get_view()
 # SIDEBAR
 # ============================================================================
 with st.sidebar:
+    # Handle logout action triggered from the footer HTML button
+    if st.query_params.get("action") == "logout":
+        logout()
+
     # Robust sidebar styling with absolute positioned footer
     st.markdown("""
     <style>
@@ -277,10 +281,9 @@ with st.sidebar:
         position: fixed;
         bottom: 0;
         left: 0;
-        width: 250px; /* Streamlit sidebar default width */
-        padding: 16px;
+        width: 250px;
         border-top: 1px solid rgba(255, 255, 255, 0.1);
-        background: #1E1E1E; /* Match sidebar background */
+        background: #1E1E1E;
         z-index: 999;
         box-sizing: border-box;
     }
@@ -506,16 +509,42 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Logout button (will be above footer)
-    if st.button("Logout", key="logout_btn", use_container_width=True):
-        logout()
-    
+
     # Pinned Footer (no help icon, outside scrollable content)
     user_email = st.session_state.get("user_email", "User")
     user_initials = "".join([word[0].upper() for word in user_email.split("@")[0].split(".")[:2]])
     
     st.markdown(f"""
-    <div class="sidebar-footer">
+    <!-- Logout button: fixed just above the avatar footer -->
+    <div style="
+        position: fixed;
+        bottom: 65px;
+        left: 0;
+        width: 250px;
+        padding: 0 16px 8px 16px;
+        box-sizing: border-box;
+        z-index: 999;
+    ">
+        <a href="?action=logout{session_param}" target="_self" style="
+            display: block;
+            text-align: center;
+            padding: 8px 0;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #9CA3AF;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            transition: background 0.2s, color 0.2s;
+        " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#FFFFFF';"
+           onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='#9CA3AF';"
+        >Logout</a>
+    </div>
+
+    <!-- Avatar footer: pinned at the very bottom -->
+    <div class="sidebar-footer" style="padding: 10px 16px;">
         <div class="sidebar-footer-content">
             <div class="sidebar-avatar">{user_initials}</div>
             <div class="sidebar-user-info">

@@ -509,8 +509,11 @@ def render_team_members(
     # ── Invite button ──
     if user_role in ["owner", "admin"]:
         st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
-        if st.button("➕ Invite Team Member", key="invite_member", use_container_width=True):
-            invite_member_dialog(org, org_id, current_user_id, db)
+        invite_col, _, _, _, _ = st.columns([1, 1, 1, 1, 1])
+        with invite_col:
+            if st.button("➕ Invite Team Member", key="invite_member", use_container_width=True):
+                invite_member_dialog(org, org_id, current_user_id, db)
+        st.markdown('<div style="margin-bottom:48px;"></div>', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

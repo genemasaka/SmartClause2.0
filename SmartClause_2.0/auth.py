@@ -417,7 +417,7 @@ def login_page():
             position: fixed;
             top: 0;
             left: 0;
-            width: 50vw;
+            width: 64vw;
             height: 100vh;
             background: linear-gradient(135deg, #5CB7FF 0%, #4B9EFF 50%, #FFFFFF 100%);
             z-index: 0;
@@ -427,7 +427,7 @@ def login_page():
             position: fixed;
             top: 0;
             right: 0;
-            width: 50vw;
+            width: 36vw;
             height: 100vh;
             background: #000000;
             z-index: 0;
@@ -486,7 +486,7 @@ def login_page():
         
         [data-testid="column"]:nth-of-type(2) > div {
             width: 100%;
-            max-width: 440px !important; /* Limit width to ensure centering */
+            max-width: 158px !important; /* Limit width to ensure centering */
             padding: 20px !important; /* Balanced padding */
             display: flex;
             flex-direction: column;
@@ -570,6 +570,12 @@ def login_page():
         
         /* 6. BUTTONS - FORCE BLUE */
         /* Target every possible button state to override red */
+        div[data-testid="stFormSubmitButton"],
+        div[data-testid="stButton"] {
+            display: flex !important;
+            justify-content: center !important;
+        }
+        
         div[data-testid="stFormSubmitButton"] > button,
         div[data-testid="stButton"] > button,
         button[kind="primary"],
@@ -580,11 +586,14 @@ def login_page():
             border: none !important;
             color: white !important;
             border-radius: 8px !important;
-            padding: 14px 20px !important;
+            padding: 8px 20px !important;
             font-size: 15px !important;
             font-weight: 600 !important;
             width: 100% !important;
             margin-top: 8px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            display: block !important;
             transition: all 0.2s ease !important;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
         }
@@ -600,6 +609,7 @@ def login_page():
         /* Toggle Links */
         .auth-toggle {
             color: #9CA3AF !important;
+            text-align: center !important;
         }
         .auth-toggle-link {
             color: #60A5FA !important;
@@ -655,7 +665,7 @@ def login_page():
     
     # Use columns for side-by-side layout
     with st.container():
-        left_col, right_col = st.columns([1, 1], gap="small")
+        left_col, right_col = st.columns([16, 9], gap="small")
     
     # Left column - Gradient branding
     with left_col:

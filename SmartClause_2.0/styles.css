@@ -2171,7 +2171,7 @@ section[data-testid="stSidebar"] {
   min-width: 256px !important;
   max-width: 256px !important;
   width: 256px !important;
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
   overflow-x: hidden !important;
   z-index: 999 !important;
   background: var(--sidebar-bg) !important;

@@ -460,41 +460,61 @@ class OrganizationManager:
         if not period_end:
             period_end = subscription['current_period_end']
         
-        # Get total documents
-        total_query = """
-        SELECT COUNT(*) as total_documents
-        FROM document_usage
-        WHERE organization_id = %s
-        AND created_at >= %s AND created_at < %s
-        """
-        
-        total_result = self.db.execute_query(
-            total_query,
-            (organization_id, period_start, period_end)
-        )
-        
-        # Get per-user breakdown
-        user_query = """
-        SELECT 
-            u.email,
-            u.raw_user_meta_data->>'full_name' as full_name,
-            COUNT(du.id) as documents_created
-        FROM document_usage du
-        JOIN auth.users u ON du.user_id = u.id
-        WHERE du.organization_id = %s
-        AND du.created_at >= %s AND du.created_at < %s
-        GROUP BY u.id, u.email, full_name
-        ORDER BY documents_created DESC
-        """
-        
-        user_result = self.db.execute_query(
-            user_query,
-            (organization_id, period_start, period_end)
-        )
-        
+        try:
+            supabase = self.db.supabase
+
+            # Query 1: total document count for the org in the period
+            total_result = (
+                supabase.table("document_usage")
+                .select("id", count="exact")
+                .eq("organization_id", organization_id)
+                .gte("created_at", str(period_start))
+                .lt("created_at", str(period_end))
+                .execute()
+            )
+            total_documents = total_result.count or 0
+
+            # Query 2: per-user breakdown — fetch user_ids, aggregate in Python,
+            # then enrich with member info (avoids the auth.users JOIN)
+            usage_result = (
+                supabase.table("document_usage")
+                .select("user_id")
+                .eq("organization_id", organization_id)
+                .gte("created_at", str(period_start))
+                .lt("created_at", str(period_end))
+                .execute()
+            )
+            user_counts: dict = {}
+            for row in (usage_result.data or []):
+                uid = row.get("user_id")
+                if uid:
+                    user_counts[uid] = user_counts.get(uid, 0) + 1
+
+            # Get member details to map user_id → email / name
+            members = self.db.get_organization_members(organization_id)
+            member_map = {m["user_id"]: m for m in (members or [])}
+
+            documents_by_user = []
+            for uid, count in sorted(user_counts.items(), key=lambda x: -x[1]):
+                member = member_map.get(uid, {})
+                documents_by_user.append({
+                    "email": member.get("email", uid),
+                    "full_name": (member.get("full_name")
+                                  or member.get("name", "")),
+                    "documents_created": count,
+                })
+
+        except Exception as _exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"get_organization_usage_summary: Supabase query failed — {_exc}"
+            )
+            total_documents = 0
+            documents_by_user = []
+
         return {
-            'total_documents': total_result[0]['total_documents'] if total_result else 0,
-            'documents_by_user': user_result or [],
+            'total_documents': total_documents,
+            'documents_by_user': documents_by_user,
             'period_start': period_start,
             'period_end': period_end,
             'subscription_tier': subscription['subscription_tier']
