@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Dict, Any, List
 from datetime import date
 import json
-
+from analytics import Analytics
 
 class DateJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles date and datetime objects."""
@@ -852,6 +852,7 @@ def render_new_matter_modal():
                     # PAYWALL CHECK: Ensure user has credits or active subscription
                     from subscription_manager import SubscriptionManager
                     from database import DatabaseManager
+                    from analytics import Analytics
                     
                     db = DatabaseManager()
                     sub_manager = SubscriptionManager(db)
@@ -860,6 +861,7 @@ def render_new_matter_modal():
                     can_generate, reason = sub_manager.can_generate_document(user_id)
                     
                     if not can_generate:
+                        Analytics().track_event("generation_blocked_paywall", {"reason": reason, "mode": mode})
                         from auth import get_session_param
                         session_param = get_session_param()
                         st.error(f"⚠️ Cannot generate document: {reason}")
@@ -905,6 +907,7 @@ def render_new_matter_modal():
                                 jurisdiction="Kenya"
                             )
                             matter_id = matter["id"]
+                            Analytics().track_event("matter_created", {"matter_id": matter_id, "doc_type": doc_type})
                         else:
                             matter_id = existing_matter_id
                         
@@ -916,6 +919,14 @@ def render_new_matter_modal():
                             document_subtype=selected_subtype,
                             generation_payload=payload
                         )
+                        
+                        Analytics().track_event("document_created", {
+                            "document_id": document["id"],
+                            "matter_id": matter_id,
+                            "doc_type": doc_type,
+                            "subtype": selected_subtype,
+                            "mode": mode
+                        })
                         
                         # Record document usage for subscription tracking
                         try:

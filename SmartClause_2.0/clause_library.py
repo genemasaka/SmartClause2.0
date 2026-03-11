@@ -5,12 +5,13 @@ from bs4 import BeautifulSoup
 import streamlit.components.v1 as components
 from error_helpers import show_error
 import json
-
+from analytics import Analytics
 
 def render_clause_library():
     """Enhanced clause library with full CRUD operations."""
     db = DatabaseManager()
     db.set_user(st.session_state.user_id)
+    
 
     # PAYWALL CHECK: Clause Library Access
     from subscription_manager import SubscriptionManager
@@ -75,6 +76,7 @@ def render_clause_library():
         category_filter = st.selectbox("Filter by Category", ["All", "Boilerplate", "Protection", "Warranties", "Definitions", "Payment Terms", "Termination", "Other"], label_visibility="collapsed")
     with col3:
         if st.button("Add New Clause", use_container_width=True, type="primary"):
+            Analytics().track_event("clause_add_initiated")
             st.session_state.show_add_clause_form = True
             st.rerun()
     
@@ -91,6 +93,9 @@ def render_clause_library():
     
     if category_filter != "All":
         filtered_clauses = [c for c in filtered_clauses if c['category'] == category_filter]
+
+    if search_query:
+        Analytics().track_event("clause_search", {"query": search_query})
     
     # Separate pinned and unpinned
     pinned = [c for c in filtered_clauses if c.get("is_pinned", False)]
@@ -183,6 +188,7 @@ def _render_clause_card_db(clause: dict, db: DatabaseManager):
             pin_text = "Unpin" if clause.get("is_pinned") else "Pin"
             if st.button(pin_text, key=f"pin_{clause['id']}", use_container_width=True):
                 db.toggle_clause_pin(clause['id'])
+                Analytics().track_event(f"clause_{pin_text.lower()}", {"clause_id": clause['id'], "title": clause['title']})
                 st.success(f"Clause {pin_text.lower()}ned!")
                 st.rerun()
             
@@ -191,6 +197,7 @@ def _render_clause_card_db(clause: dict, db: DatabaseManager):
                 if clause.get('is_system'):
                     st.warning("System clauses cannot be edited.")
                 else:
+                    Analytics().track_event("clause_edit_initiated", {"clause_id": clause['id']})
                     st.session_state.show_edit_clause_form = True
                     st.session_state.edit_clause_id = clause['id']
                     st.rerun()
@@ -258,6 +265,7 @@ def _render_clause_card_db(clause: dict, db: DatabaseManager):
                 if clause.get('is_system'):
                     st.warning("System clauses cannot be deleted.")
                 else:
+                    Analytics().track_event("clause_delete_initiated", {"clause_id": clause['id']})
                     st.session_state[f"confirm_delete_clause_{clause['id']}"] = True
                     st.rerun()
         
@@ -271,6 +279,7 @@ def _render_clause_card_db(clause: dict, db: DatabaseManager):
         with col_yes:
             if st.button("Yes, Delete", key=f"confirm_yes_clause_{clause['id']}", use_container_width=True, type="primary"):
                 db.update_clause(clause['id'], {"deleted_at": "now()"})
+                Analytics().track_event("clause_delete_confirmed", {"clause_id": clause['id']})
                 st.session_state[f"confirm_delete_clause_{clause['id']}"] = False
                 st.success(f"✅ Deleted '{clause['title']}'")
                 time.sleep(0.5)
@@ -344,6 +353,7 @@ def render_add_clause_form(db: DatabaseManager):
                     )
                     
                     st.session_state.show_add_clause_form = False
+                    Analytics().track_event("clause_create_success", {"title": title, "category": category})
                     st.success(f"✅ Clause '{title}' added successfully!")
                     time.sleep(1)
                     st.rerun()
@@ -411,6 +421,7 @@ def render_edit_clause_form(db: DatabaseManager, clause_id: str):
                     
                     st.session_state.show_edit_clause_form = False
                     st.session_state.edit_clause_id = None
+                    Analytics().track_event("clause_update_success", {"clause_id": clause_id, "title": title})
                     st.success(f"Clause '{title}' updated successfully!")
                     time.sleep(1)
                     st.rerun()

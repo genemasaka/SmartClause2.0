@@ -16,7 +16,7 @@ from database import DatabaseManager
 from modal_close_helper import confirm_generation_started, is_waiting_for_generation
 from error_helpers import show_error
 from auth import update_query_params
-
+from analytics import Analytics
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -570,6 +570,9 @@ def _save_comment_to_db(db: DatabaseManager, version_id: str, comment_data: dict
 
 def _init_editor_state():
     """Initialize all editor session state variables."""
+    if "editor_initialized" not in st.session_state:
+        Analytics().track_event("editor_initialized")
+        st.session_state.editor_initialized = True
     if "editor_content" not in st.session_state:
         st.session_state.editor_content = ""
     
@@ -629,6 +632,7 @@ def _handle_progressive_save(db: DatabaseManager, document_id: str, content: str
         current_version_id = st.session_state.current_version_id
         
         print(f"💾 Autosaving {word_count} words to version {current_version_id}")
+        Analytics().track_event("document_autosaved", {"document_id": document_id, "version_id": current_version_id, "word_count": word_count})
         
         updated_version = db.update_version_content(
             version_id=current_version_id,
@@ -675,6 +679,7 @@ def _handle_comment_action(db: DatabaseManager, version_id: str, action: dict):
             print(f"📝 Creating comment: {comment_data.get('text', '')[:50]}...")
             success = _save_comment_to_db(db, version_id, comment_data)
             if success:
+                Analytics().track_event("comment_created", {"version_id": version_id})
                 print(f"✅ Comment saved to database successfully")
                 # Reload comments from database
                 st.session_state.editor_comments = _get_comments_for_version(db, version_id)
@@ -693,6 +698,7 @@ def _handle_comment_action(db: DatabaseManager, version_id: str, action: dict):
             print(f"✅ Resolving comment {comment_id}")
             success = db.resolve_comment(comment_id)
             if success:
+                Analytics().track_event("comment_resolved", {"comment_id": comment_id, "version_id": version_id})
                 print(f"✅ Comment {comment_id} resolved successfully")
                 st.session_state.editor_comments = _get_comments_for_version(db, version_id)
                 return True
@@ -1002,6 +1008,8 @@ def _handle_chat_message(
             content=full_response,
             metadata={'edits': edits} if edits else None
         )
+        
+        Analytics().track_event("chat_ai_response", {"version_id": version_id, "has_edits": bool(edits)})
         
         logger.info(f"Chat message processed with {len(edits)} edit suggestions")
         
@@ -1466,6 +1474,8 @@ def render_document_editor():
                 'latest_version': latest_version
             }
             
+            Analytics().track_event("document_loaded", {"document_id": document_id})
+            
             # Clear loading animation
             loading_placeholder.empty()
             
@@ -1541,6 +1551,7 @@ def render_document_editor():
         generator = DocumentGenerator()
         
         with st.spinner("Drafting your document..."):
+            Analytics().track_event("document_generation_started", {"matter_id": matter_id})
             stream_container = st.empty()
             generated_content = ""
             generation_failed = False
@@ -1702,6 +1713,8 @@ def render_document_editor():
                         is_major_version=True,
                         change_summary="AI-generated initial draft"
                     )
+                    
+                    Analytics().track_event("document_generation_success", {"document_id": document_id, "version_id": version["id"]})
                     
                     db.update_document_status(document_id, "draft")
                     
@@ -1884,6 +1897,8 @@ def render_document_editor():
                             change_summary=None
                         )
                         
+                        Analytics().track_event("document_save_version", {"document_id": document_id, "version_id": version["id"]})
+                        
                         st.session_state.current_version_id = version["id"]
                         st.session_state.editor_original_content = current_content
                         st.session_state.last_autosave = time.time()
@@ -1944,7 +1959,8 @@ def render_document_editor():
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         use_container_width=True,
                         key="download_docx_btn",
-                        help=f"Download current version as {docx_filename}"
+                        help=f"Download current version as {docx_filename}",
+                        on_click=lambda: Analytics().track_event("document_export_docx", {"document_id": document_id, "version_id": st.session_state.current_version_id})
                     )
             except Exception as e:
                 show_error(e, "document")

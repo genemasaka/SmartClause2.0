@@ -13,6 +13,7 @@ from subscription_manager import SubscriptionManager, PRICING
 from organization_manager import get_user_role_from_org
 from database import DatabaseManager
 
+from analytics import Analytics
 logger = logging.getLogger(__name__)
 
 
@@ -139,6 +140,7 @@ def invite_member_dialog(org: Dict, org_id: str, current_user_id: str, db: Datab
             st.rerun()
     with col_send:
         if st.button("Send Invitation", type="primary", use_container_width=True):
+            
             if not email or "@" not in email:
                 st.error("Please enter a valid email address.")
                 return
@@ -172,6 +174,7 @@ def invite_member_dialog(org: Dict, org_id: str, current_user_id: str, db: Datab
             else:
                 sent = _send_invite_email(email, org.get("name", "SmartClause"), role, token)
                 if sent:
+                    Analytics().track_event("team_invite_sent", {"role": role, "email_domain": email.split('@')[-1]})
                     st.success(f"✅ Invitation email sent to **{email}**!")
                 else:
                     st.info(
@@ -280,6 +283,9 @@ def render_organization_dashboard():
     # This fixes "No active subscription" errors on-the-fly for admins
     org_tier = org.get("subscription_tier", "trial")
     subscription = db.ensure_organization_subscription(org["id"], org_tier)
+    
+    analytics = Analytics()
+    Analytics().track_page_visit("Organization Dashboard")
 
     # ── Page Header ───────────────────────────────────────────────────────
     st.markdown(f"""
@@ -444,6 +450,8 @@ def render_team_members(
             with col_action:
                 if not is_self and not is_owner and user_role in ["owner", "admin"]:
                     if st.button("✕", key=f"remove_{member.get('user_id')}", help="Remove member"):
+                        
+                        Analytics().track_event("team_member_remove_initiated", {"member_uid": member.get('user_id')})
                         st.session_state[f"confirm_remove_{member.get('user_id')}"] = True
                         st.rerun()
 
@@ -461,6 +469,10 @@ def render_team_members(
                             #     eliminating the counter drift described in Issue 4.
                             org_manager = sub_manager.org_manager
                             org_manager.remove_organization_member(org_id, uid)
+                            
+                            
+                            Analytics().track_event("team_member_removed", {"member_uid": uid})
+                            
                             st.session_state[f"confirm_remove_{uid}"] = False
                             st.success("Member removed.")
                         except ValueError as ve:
@@ -501,6 +513,10 @@ def render_team_members(
             with col_cancel:
                 if st.button("✕", key=f"cancel_inv_{inv_id}", help="Cancel invitation"):
                     db.cancel_invitation(inv_id)
+                    
+                    
+                    Analytics().track_event("team_invite_cancelled", {"invite_id": inv_id})
+                    
                     st.success(f"Invitation to {inv_email} cancelled.")
                     st.rerun()
 

@@ -9,7 +9,7 @@ from database import DatabaseManager
 from payment_flow import PaymentFlowManager
 from mpesa_handler import MpesaHandler
 import time
-
+from analytics import Analytics
 
 def render_pricing_page():
     """Main pricing page with enterprise subscription tiers"""
@@ -87,6 +87,8 @@ def render_pricing_page():
     # Initialize managers
     db = DatabaseManager()
     user_id = st.session_state.get("user_id")
+    
+    Analytics().track_page_visit("Pricing")
     
     if user_id:
         db.set_user(user_id)
@@ -180,6 +182,7 @@ def render_pricing_page():
         
         if user_id and current_tier != INDIVIDUAL_TIER:
             if st.button("Get Individual (KES 8,500/mo)", key="buy_individual", use_container_width=True):
+                Analytics().track_event("plan_selection_initiated", {"tier": INDIVIDUAL_TIER, "amount": 8500})
                 st.session_state.show_payment_modal = True
                 st.session_state.payment_tier = INDIVIDUAL_TIER
                 st.session_state.payment_seats = 1
@@ -236,6 +239,7 @@ def render_pricing_page():
         
         if user_id and current_tier != TEAM_TIER:
             if st.button("Get Team (from KES 19,500/mo)", key="buy_team", use_container_width=True):
+                Analytics().track_event("plan_selection_initiated", {"tier": TEAM_TIER, "amount": 6500 * 3})
                 st.session_state.show_payment_modal = True
                 st.session_state.payment_tier = TEAM_TIER
                 st.session_state.payment_seats = 3 # Default minimum
@@ -297,6 +301,7 @@ def render_pricing_page():
         
         if user_id and current_tier != ENTERPRISE_TIER:
             if st.button("Contact Sales", key="buy_enterprise", use_container_width=True):
+                Analytics().track_event("plan_selection_initiated", {"tier": ENTERPRISE_TIER, "is_contact_sales": True})
                 st.info("📧 Contact us at sales@smartclause.co.ke for Enterprise pricing")
         else:
             st.info("Current Plan" if current_tier == ENTERPRISE_TIER else "Log in to subscribe")
@@ -338,7 +343,7 @@ def render_payment_modal(payment_manager, user_id, org_name):
             st.session_state.show_payment_modal = False
             st.rerun()
         return
-
+    
     tier = st.session_state.get("payment_tier")
     seats = st.session_state.get("payment_seats", 1)
     base_amount = st.session_state.get("payment_amount", 0)
@@ -428,6 +433,8 @@ def render_payment_modal(payment_manager, user_id, org_name):
                         phone_number=phone_number
                     )
                     
+                    Analytics().track_event("payment_initiated", {"tier": tier, "seats": seats, "amount": amount})
+                    
                     if result['success']:
                         st.success("✅ Payment initiated! Check your phone.")
                         
@@ -443,6 +450,7 @@ def render_payment_modal(payment_manager, user_id, org_name):
                             )
                         
                         if verify_result['success']:
+                            Analytics().track_event("payment_success", {"tier": tier, "seats": seats, "amount": amount})
                             # Import success helpers from paywall_ui
                             from paywall_ui import show_payment_success, show_payment_error
                             show_payment_success(tier)
@@ -450,9 +458,11 @@ def render_payment_modal(payment_manager, user_id, org_name):
                             st.session_state.show_payment_modal = False
                             st.rerun()
                         else:
+                            Analytics().track_event("payment_verification_failed", {"tier": tier, "error": verify_result['message']})
                             st.error(f"❌ Payment Verification Failed: {verify_result['message']}")
                             st.info("If your M-Pesa was charged, please contact support with your phone number.")
                     else:
+                        Analytics().track_event("payment_initiation_failed", {"tier": tier, "error": result['message']})
                         st.error(f"Payment failed: {result['message']}")
     
     with st.expander("What happens when I reach my document limit?"):

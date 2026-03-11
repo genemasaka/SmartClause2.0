@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from database import DatabaseManager
 from case_manager_logic import CaseManager
 from error_helpers import show_error
+from analytics import Analytics
 
 
 def render_case_manager(matter_id: str, matter_name: str, db: DatabaseManager):
@@ -186,9 +187,13 @@ def render_case_manager(matter_id: str, matter_name: str, db: DatabaseManager):
                 <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" stroke-width="2"/>
                 <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/>
             </svg>
+            </svg>
             <h1 style="font-size: 24px; font-weight: 700; color: #FFFFFF; margin: 0;">Case Manager</h1>
         </div>
         """, unsafe_allow_html=True)
+        
+        
+        Analytics().track_page_visit("Case Manager")
     
     with col2:
         if st.button("New Case", use_container_width=True, type="primary", key="new_case_main_btn"):
@@ -287,6 +292,8 @@ def _render_case_card(case: Dict[str, Any], case_mgr: CaseManager, user_id: str)
     
     # Click handler button
     if st.button("View Case", key=f"view_case_{case['id']}", type="secondary", use_container_width=True):
+        
+        Analytics().track_event("case_viewed", {"case_id": case['id'], "case_number": case.get('case_number')})
         st.session_state['show_case_modal'] = True
         st.session_state['selected_case_id'] = case['id']
         st.session_state['case_analysis'] = None  # Clear previous analysis
@@ -424,6 +431,8 @@ def _render_new_case_form(matter_id: str, case_mgr: CaseManager, user_id: str, o
             new_case = case_mgr.create_case(matter_id, user_id, organization_id, case_data)
             
             if new_case:
+                
+                Analytics().track_event("case_created", {"case_id": new_case['id'], "case_type": case_type})
                 st.success("✅ Case created successfully!")
                 st.session_state['show_new_case_form'] = False
                 import time
@@ -594,6 +603,8 @@ def _render_edit_case_form(case_id: str, case_mgr: CaseManager, user_id: str):
                 result = case_mgr.update_case(case_id, updates)
                 
                 if result:
+                    
+                    Analytics().track_event("case_updated", {"case_id": case_id, "status": case_status})
                     st.success("✅ Case updated successfully!")
                     st.session_state['show_edit_case_form'] = False
                     st.session_state['show_case_modal'] = True
@@ -655,6 +666,8 @@ def _render_case_modal(case: Dict[str, Any], case_mgr: CaseManager, user_id: str
                 time.sleep(0.5)  # Brief delay for UX
                 analysis = case_mgr.analyze_case(case['id'])
                 if 'error' not in analysis:
+                    
+                    Analytics().track_event("case_ai_analysis_triggered", {"case_id": case['id']})
                     st.session_state['case_analysis'] = analysis
                     st.rerun()
                 else:
@@ -907,6 +920,8 @@ def _render_add_event_form(case_id: str, case_mgr: CaseManager, user_id: str):
                     try:
                         result = case_mgr.add_event(case_id, event_data, user_id)
                         if result:
+                            
+                            Analytics().track_event("case_event_added", {"case_id": case_id, "event_type": event_type})
                             st.success("✅ Event added successfully!")
                             st.session_state['show_add_event'] = False
                             import time
@@ -983,6 +998,8 @@ def _render_task_card(task: Dict[str, Any], case_mgr: CaseManager, user_id: str)
     if status != 'completed':
         if st.button(f"✓ Complete", key=f"complete_{task['id']}", type="secondary"):
             case_mgr.complete_task(task['id'], user_id)
+            
+            Analytics().track_event("case_task_completed", {"case_id": task.get('case_id'), "task_id": task['id']})
             st.rerun()
 
 
@@ -1033,6 +1050,8 @@ def _render_add_task_form(case_id: str, case_mgr: CaseManager, user_id: str):
                     try:
                         result = case_mgr.create_task(case_id, task_data, user_id)
                         if result:
+                            
+                            Analytics().track_event("case_task_created", {"case_id": case_id, "priority": priority})
                             st.success("✅ Task added successfully!")
                             st.session_state['show_add_task'] = False
                             import time
@@ -1069,6 +1088,8 @@ def _render_notes_tab(case_id: str, case_mgr: CaseManager, user_id: str):
                 try:
                     result = case_mgr.add_note(case_id, note_text.strip(), note_type, user_id)
                     if result:
+                        
+                        Analytics().track_event("case_note_added", {"case_id": case_id, "note_type": note_type})
                         st.success("✅ Note added successfully!")
                         import time
                         time.sleep(0.5)

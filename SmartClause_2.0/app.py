@@ -13,6 +13,7 @@ from pricing_page import render_pricing_page
 from subscription_manager import SubscriptionManager
 from components.organization_dashboard import render_organization_dashboard
 from legal_pages import render_privacy_policy, render_terms_of_use
+from analytics import Analytics
 # ============================================================================
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
@@ -202,7 +203,17 @@ db = get_database()
 
 # Set user_id from authenticated session
 if st.session_state.get("user_id"):
-    db.set_user(st.session_state["user_id"])
+    user_id = st.session_state["user_id"]
+    db.set_user(user_id)
+    
+    # IDENTIFY: Link session to user once
+    if not st.session_state.get("_analytics_identified"):
+        Analytics().identify(
+            user_id=user_id,
+            email=st.session_state.get("email"),
+            name=st.session_state.get("full_name")
+        )
+        st.session_state["_analytics_identified"] = True
 
 # Initialize Subscription Manager
 @st.cache_resource
@@ -254,6 +265,9 @@ def get_view() -> str:
         return st.session_state.get("current_view", "matters")
 
 view = get_view()
+
+# Track page visit
+Analytics().track_page_visit(view)
 
 # ============================================================================
 # SIDEBAR

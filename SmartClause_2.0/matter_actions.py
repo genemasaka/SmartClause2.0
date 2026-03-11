@@ -1,7 +1,7 @@
 import streamlit as st
 from database import DatabaseManager
 from error_helpers import show_error
-
+from analytics import Analytics
 
 def render_matter_actions_menu(matter_id: str, matter_name: str):
     """
@@ -112,6 +112,8 @@ def handle_pin_matter(matter_id: str) -> bool:
         db = DatabaseManager()
         db.set_user(st.session_state["user_id"])
         
+        
+        
         # Get current matter
         matter = db.get_matter(matter_id)
         if not matter:
@@ -127,6 +129,7 @@ def handle_pin_matter(matter_id: str) -> bool:
         
         if result:
             action = "Pinned" if new_pinned else "Unpinned"
+            Analytics().track_event(f"matter_{action.lower()}", {"matter_id": matter_id, "name": matter['name']})
             st.success(f"{'📌' if new_pinned else '📍'} {action} '{matter['name']}'")
             return True
         else:
@@ -144,6 +147,8 @@ def handle_archive_matter(matter_id: str) -> bool:
         db = DatabaseManager()
         db.set_user(st.session_state["user_id"])
         
+        
+        
         # Get current matter
         matter = db.get_matter(matter_id)
         if not matter:
@@ -154,6 +159,7 @@ def handle_archive_matter(matter_id: str) -> bool:
         result = db.update_matter(matter_id, {"status": "archived"})
         
         if result:
+            Analytics().track_event("matter_archived", {"matter_id": matter_id, "name": matter['name']})
             st.success(f"📦 Archived '{matter['name']}'")
             return True
         else:
@@ -171,6 +177,8 @@ def handle_delete_matter(matter_id: str) -> bool:
         db = DatabaseManager()
         db.set_user(st.session_state["user_id"])
         
+        
+        
         # Get matter name before deletion
         matter = db.get_matter(matter_id)
         if not matter:
@@ -181,6 +189,7 @@ def handle_delete_matter(matter_id: str) -> bool:
         success = db.delete_matter(matter_id, hard_delete=False)
         
         if success:
+            Analytics().track_event("matter_deleted", {"matter_id": matter_id, "name": matter['name']})
             return True
         else:
             st.error("Failed to delete matter")

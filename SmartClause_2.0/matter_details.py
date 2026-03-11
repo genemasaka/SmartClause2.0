@@ -4,7 +4,7 @@ from database import DatabaseManager
 from typing import Optional, Dict, Any
 import logging
 from error_helpers import show_error
-
+from analytics import Analytics
 
 def get_time_ago(dt: datetime) -> str:
     """Helper to show relative time."""

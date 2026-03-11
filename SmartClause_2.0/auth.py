@@ -7,8 +7,13 @@ from dotenv import load_dotenv
 import time
 import hashlib
 import hmac
+from analytics import Analytics
 
 load_dotenv()
+
+# Initialize Analytics
+def get_analytics():
+    return Analytics()
 
 # Secret key for session cookies (change this to a random secret in production)
 SESSION_SECRET = os.getenv("SESSION_SECRET", "your-secret-key-change-in-production")
@@ -202,9 +207,12 @@ def clear_session():
         if key in st.session_state:
             del st.session_state[key]
     
-    # Clear session from query params
-    if "session" in st.query_params:
-        del st.query_params["session"]
+    # Clear all query params to prevent action triggers (like action=logout) from persisting
+    for key in list(st.query_params.keys()):
+        try:
+            del st.query_params[key]
+        except Exception:
+            pass
 
 
 def login_page():
@@ -347,364 +355,587 @@ def login_page():
     # Add custom CSS for the modern split-screen layout
     st.markdown("""
     <style>
-        /* 1. GLOBAL RESET & HIDE - COMPLETE SIDEBAR REMOVAL */
-        #MainMenu, header, footer {visibility: hidden;}
-        [data-testid="stToolbar"] {display: none;}
-        
-        /* Force sidebar to be completely hidden and take no space */
-        [data-testid="stSidebar"] {
-            display: none !important;
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding: 0 !important;
-            transform: translateX(-100%) !important;
-        }
-        
+        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&display=swap');
+
+        /* ── HIDE CHROME ───────────────────────────────────────────── */
+        #MainMenu, header, footer { visibility: hidden; }
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"] { display: none !important; }
+
+        /* ── SIDEBAR: completely removed on auth page ───────────────── */
+        [data-testid="stSidebar"],
         section[data-testid="stSidebar"] {
             display: none !important;
-            width: 0 !important;
-            min-width: 0 !important;
-            max-width: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            width: 0 !important; min-width: 0 !important; max-width: 0 !important;
+            margin: 0 !important; padding: 0 !important;
         }
-        
-        [data-testid="collapsedControl"] {display: none !important;}
-        [data-testid="stDecoration"] {display: none !important;}
-        
-        /* Force main content area to take full width with no left offset */
+        [data-testid="collapsedControl"] { display: none !important; }
+
+        /* ── RESET LAYOUT ───────────────────────────────────────────── */
+        body, .stApp, .appview-container,
         [data-testid="stAppViewContainer"] {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-            width: 100vw !important;
-            max-width: 100vw !important;
-        }
-        
-        [data-testid="stAppViewContainer"] > div:first-child {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-        }
-        
-        /* Override any sidebar spacing that might exist */
-        .main {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-            width: 100vw !important;
-        }
-        
-        .stApp {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-        }
-        
-        .appview-container {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-            width: 100vw !important;
-        }
-        
-        /* Ensure no gap on the left side */
-        body {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        
-        /* 2. BACKGROUND LAYERS */
-        .split-bg-left {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 64vw;
-            height: 100vh;
-            background: linear-gradient(135deg, #5CB7FF 0%, #4B9EFF 50%, #FFFFFF 100%);
-            z-index: 0;
-        }
-        
-        .split-bg-right {
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 36vw;
-            height: 100vh;
-            background: #000000;
-            z-index: 0;
-        }
-        
-        /* 3. CONTENT CONTAINER */
-        .stApp {
+            margin: 0 !important; padding: 0 !important;
+            width: 100vw !important; max-width: 100vw !important;
             background: transparent !important;
+            overflow-x: hidden !important;
         }
-        
+        section.main, section[data-testid="stMain"],
+        div.appview-container > section.main {
+            margin-left: 0 !important;
+            width: 100vw !important; max-width: 100vw !important;
+        }
         .main {
             background: transparent !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            overflow: hidden !important;
+            padding: 0 !important; margin: 0 !important;
         }
-        
         .block-container {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
+            padding: 0 !important; margin: 0 !important;
+            max-width: 100% !important; width: 100% !important;
         }
-        
-        /* 4. CONTENT ALIGNMENT */
+
+        /* ── SPLIT BACKGROUNDS ──────────────────────────────────────── */
+        .auth-bg-left {
+            position: fixed; top: 0; left: 0;
+            width: 62vw; height: 100vh; z-index: 0;
+            background: #1a6fd4 !important; /* Professional solid blue */
+        }
+        /* Subtle grid overlay for texture */
+        .auth-bg-left::before {
+            content: '';
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+        /* Soft orb accents */
+        .auth-bg-left::after {
+            content: '';
+            position: absolute;
+            width: 520px; height: 520px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+            bottom: -120px; left: -80px;
+        }
+        .auth-bg-right {
+            position: fixed; top: 0; right: 0;
+            width: 38vw; height: 100vh; z-index: 0;
+            background: #000000;
+        }
+
+        /* ── COLUMN LAYOUT ──────────────────────────────────────────── */
         [data-testid="column"] {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
             height: 100vh !important;
             z-index: 1;
         }
-        
-        /* Left Column - Farthest Left Alignment */
+        /* Left: brand panel — fills its flex share, scrollable if content overflows */
         [data-testid="column"]:nth-of-type(1) {
             align-items: flex-start !important;
-            padding-left: 40px !important;
+            justify-content: flex-start !important;
+            flex: 16 !important;
+            overflow: hidden !important;
         }
-        
-        [data-testid="column"]:nth-of-type(1) > div {
-            width: 100%;
-            padding: 0 !important;
-        }
-        
-        /* Right Column - Centered */
-        [data-testid="column"]:nth-of-type(2) {
-            align-items: center !important;
-            justify-content: center !important;
+        /* Propagate height through left column Streamlit wrappers */
+        html body [data-testid="column"]:nth-of-type(1) > div,
+        html body [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlockBorderWrapper"],
+        html body [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
+            height: 100% !important;
             display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
         }
-        
-        [data-testid="column"]:nth-of-type(2) > div {
-            width: 100%;
-            max-width: 158px !important; /* Limit width to ensure centering */
-            padding: 20px !important; /* Balanced padding */
+        /* Right Column (Form Column) styling */
+        [data-testid="column"]:nth-of-type(2) {
+            padding-right: 0 !important;
+            padding-left: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            justify-content: center !important;
+            background: #000 !important;
+        }
+
+        /* FORM WRAPPER — viewport-relative padding to visually center form */
+        .auth-form-wrapper {
+            width: 100% !important;
+            padding-top: calc(50vh - 210px) !important;
+            display: flex !important;
+            justify-content: center !important;
+        }
+
+        /* ── 60% WIDTH INNER FORM CONTAINER ────────────────────────────
+           This div wraps all form content and constrains it to 60% of
+           the right column. All Streamlit elements inside inherit this
+           width via width:100% on their own containers.               */
+        .auth-form-inner {
+            width: 60% !important;
+            min-width: 260px !important;
+            max-width: 400px !important;
+            flex-shrink: 0;
+        }
+
+        /* ── PROPAGATE HEIGHT THROUGH STREAMLIT'S INTERNAL WRAPPERS ─────
+           The right column has height:100vh and justify-content:center,
+           but Streamlit's stVerticalBlockBorderWrapper and stVerticalBlock
+           are height:auto by default, so centering has no effect.
+           Force height:100% + flex all the way down the chain.          */
+        html body [data-testid="column"]:nth-of-type(2) > div,
+        html body [data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlockBorderWrapper"],
+        html body [data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlock"] {
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+        }
+
+        /* Force all form elements inside .auth-form-inner to fill their container */
+        .auth-form-inner .stTextInput,
+        .auth-form-inner .stButton,
+        .auth-form-inner div[data-testid="stForm"],
+        .auth-form-inner div[data-testid="stFormSubmitButton"],
+        .auth-form-inner div[data-testid="stButton"],
+        .auth-form-inner .auth-title,
+        .auth-form-inner .auth-subtitle,
+        .auth-form-inner .auth-toggle,
+        .auth-form-inner .auth-privacy-notice {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Inputs inside the 60% container fill full width */
+        .auth-form-inner .stTextInput > div,
+        .auth-form-inner .stTextInput input {
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Buttons inside the 60% container fill full width */
+        .auth-form-inner div[data-testid="stFormSubmitButton"] > button,
+        .auth-form-inner div[data-testid="stButton"] > button {
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Completely strip Streamlit's form container to match button widths */
+        div[data-testid="stForm"], 
+        div[data-testid="stForm"] > div,
+        [data-testid="stForm"] [data-testid="stVerticalBlock"] {
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+
+        /* ── BRAND PANEL ────────────────────────────────────────────── */
+        .auth-brand-panel {
+            padding: 48px 64px 40px 64px;
+            max-width: 58vw !important;
+            animation: fadeSlideUp 0.7s ease both;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            margin: 0 auto !important; /* Auto margins for horizontal centering */
+            justify-content: flex-start;
+            height: 100%;
+            box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: none; /* Firefox */
         }
-        
-        /* 5. TYPOGRAPHY & COLORS */
-        .auth-brand-content {
-            text-align: left !important;
-            padding-left: 20px; /* Slight buffer from absolute edge */
+        .auth-brand-panel::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+        .auth-brand-logo {
+            margin-bottom: 40px;
         }
-        
-        .auth-brand-content h1 {
-            color: white;
-            font-size: 48px;
-            font-weight: 700;
-            margin-bottom: 24px;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .auth-brand-logo img {
+            width: 180px; height: auto; display: block;
+            filter: drop-shadow(0 2px 16px rgba(0,0,0,0.18));
         }
-        
-        .auth-brand-content p {
-            color: rgba(255, 255, 255, 0.95);
-            font-size: 18px;
-            line-height: 1.6;
-            max-width: 90%;
+        .auth-brand-logo-fallback {
+            font-size: 22px; font-weight: 800;
+            color: #fff; margin-bottom: 20px; letter-spacing: -0.02em;
         }
-        
-        /* Logo styling */
-        .auth-logo {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #4B9EFF 0%, #3B7DD1 100%);
+        .auth-brand-headline {
+            font-family: 'Hanken Grotesk', sans-serif !important;
+            font-size: clamp(48px, 6vw, 84px);
+            font-weight: 800; line-height: 0.95;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+            margin-bottom: 16px;
+            max-width: 800px;
+            text-shadow: 0 2px 20px rgba(0,0,0,0.12);
+        }
+        .auth-brand-headline em {
+            font-style: normal;
+            background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0.75) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .auth-brand-sub {
+            font-size: 16px; line-height: 1.6;
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 20px;
+            max-width: 650px;
+        }
+        /* Feature items */
+        .auth-features {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 0;
+        }
+        .auth-feature-item {
             display: flex;
             align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 32px;
-            box-shadow: 0 4px 12px rgba(75, 158, 255, 0.3);
+            gap: 12px;
+            color: rgba(255,255,255,0.88);
+            font-size: 14px;
+            font-weight: 500;
         }
-        
-        /* Right Side Text - Updated for Black Background */
+        .auth-feature-icon {
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            color: rgba(255,255,255,0.95);
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        /* Dual Testimonials Grid — adjacent layout within column */
+        .auth-testimonials-grid {
+            margin-top: 20px;
+            margin-bottom: 40px;
+            display: flex;
+            gap: 14px;
+            flex-direction: row;
+            flex-wrap: wrap;
+            width: 100%;
+            justify-content: flex-start;
+            align-items: stretch;
+        }
+        /* Testimonial card */
+        .auth-testimonial {
+            flex: 1; /* Equal width cards */
+            min-width: 280px; /* Prevent too much squishing */
+            max-width: 48%; /* Keep within half column width roughly */
+            padding: 24px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            transition: transform 0.3s ease;
+            
+        }
+        .auth-testimonial:hover {
+            transform: translateY(-4px);
+            background: rgba(255,255,255,0.14);
+        }
+        .auth-testimonial-quote {
+            font-size: 14px; line-height: 1.6;
+            color: rgba(255,255,255,0.9);
+            font-style: italic; margin-bottom: 12px;
+        }
+        .auth-testimonial-author {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .auth-testimonial-avatar {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; color: white;
+        }
+        .auth-testimonial-name {
+            font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);
+        }
+        .auth-testimonial-role {
+            font-size: 12px; color: rgba(255,255,255,0.6);
+        }
+
+        /* ── AUTH FORM (RIGHT PANEL) ────────────────────────────────── */
+        .auth-logo {
+            width: 52px; height: 52px; border-radius: 12px;
+            background: linear-gradient(135deg, #4B9EFF 0%, #3B7DD1 100%);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 22px; font-weight: 700;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 16px rgba(75,158,255,0.35);
+        }
         .auth-title {
-            font-size: 32px;
-            font-weight: 700;
-            color: #FFFFFF !important;
-            margin-bottom: 12px;
+            font-size: 28px; font-weight: 700;
+            color: #FFFFFF !important; margin-bottom: 6px; letter-spacing: -0.01em;
         }
-        
         .auth-subtitle {
-            font-size: 15px;
-            color: #9CA3AF !important;
-            margin-bottom: 32px;
-            line-height: 1.5;
+            font-size: 14px; color: #6B7280 !important;
+            margin-bottom: 28px; line-height: 1.55;
         }
-        
-        .stTextInput label {
-            color: #D1D5DB !important;
-        }
-        
-        /* Input Fields - White Background, No Text, Blue Border on Focus */
+
+        /* Inputs */
+        .stTextInput label { color: #9CA3AF !important; font-size: 13px !important; font-weight: 500 !important; }
         .stTextInput input {
-            background-color: #FFFFFF !important;
-            color: #1A1D24 !important;
-            border: 1px solid #D1D5DB !important;
+            background-color: #111317 !important;
+            color: #FFFFFF !important;
+            border: 1px solid #252930 !important;
             border-radius: 8px !important;
+            font-size: 14px !important;
         }
-        
-        /* Focus state: Blue border same as buttons */
+        .stTextInput input:focus { border-color: #4B9EFF !important; }
         .stTextInput > div > div:focus-within {
             border-color: #4B9EFF !important;
-            box-shadow: 0 0 0 1px #4B9EFF !important;
+            box-shadow: 0 0 0 3px rgba(75,158,255,0.12) !important;
         }
-        
-        .stTextInput input:focus {
-            border-color: #4B9EFF !important;
-        }
-        
-        /* 6. BUTTONS - FORCE BLUE */
-        /* Target every possible button state to override red */
+
+        /* Buttons */
         div[data-testid="stFormSubmitButton"],
         div[data-testid="stButton"] {
             display: flex !important;
             justify-content: center !important;
         }
-        
         div[data-testid="stFormSubmitButton"] > button,
-        div[data-testid="stButton"] > button,
-        button[kind="primary"],
-        button[kind="secondary"],
-        button[type="submit"] {
-            background: linear-gradient(135deg, #4B9EFF 0%, #3B7DD1 100%) !important;
-            background-color: #4B9EFF !important;
+        div[data-testid="stButton"] > button {
+            background: #4B9EFF !important;
             border: none !important;
             color: white !important;
             border-radius: 8px !important;
-            padding: 8px 20px !important;
-            font-size: 15px !important;
-            font-weight: 600 !important;
+            padding: 7px 20px !important;
+            font-size: 13px !important; font-weight: 600 !important;
             width: 100% !important;
-            margin-top: 8px !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-            display: block !important;
+            min-height: unset !important;
+            line-height: 1.4 !important;
             transition: all 0.2s ease !important;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
         }
-        
         div[data-testid="stFormSubmitButton"] > button:hover,
-        div[data-testid="stButton"] > button:hover,
-        button:hover {
-            background: linear-gradient(135deg, #5BABFF 0%, #4B8EE1 100%) !important;
-            box-shadow: 0 6px 12px rgba(75, 158, 255, 0.3) !important;
-            transform: translateY(-1px);
+        div[data-testid="stButton"] > button:hover {
+            background: #5BABFF !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(75,158,255,0.28) !important;
         }
-        
-        /* Toggle Links */
-        .auth-toggle {
-            color: #9CA3AF !important;
-            text-align: center !important;
+
+        /* Forgot password — match Sign In button width/style */
+        .forgot-password-btn {
+            width: 100% !important;
         }
-        .auth-toggle-link {
-            color: #60A5FA !important;
-        }
-        
-        /* Forgot password link */
         .forgot-password-btn > button {
-            background: transparent !important;
+            background: #4B9EFF !important;
             border: none !important;
-            color: #60A5FA !important;
+            color: #fff !important;
             font-size: 13px !important;
-            font-weight: 400 !important;
-            padding: 0 !important;
-            margin: 0 !important;
+            font-weight: 600 !important;
+            padding: 7px 20px !important;
             box-shadow: none !important;
-            width: auto !important;
-            text-decoration: underline;
-            cursor: pointer;
+            width: 100% !important;
+            min-height: unset !important;
+            line-height: 1.4 !important;
+            border-radius: 8px !important;
+            text-decoration: none !important;
+            transition: all 0.2s ease !important;
         }
         .forgot-password-btn > button:hover {
-            background: transparent !important;
-            box-shadow: none !important;
-            transform: none !important;
-            color: #93C5FD !important;
+            background: #5BABFF !important;
+            box-shadow: 0 4px 12px rgba(75,158,255,0.28) !important;
+            transform: translateY(-1px) !important;
+            text-decoration: none !important;
         }
-        
-        /* Reset gap */
-        [data-testid="stHorizontalBlock"] {
-            gap: 0 !important;
+
+        /* Toggle / switch-view text */
+        .auth-toggle {
+            font-size: 13px; color: #4B5563 !important;
+            text-align: center; margin-top: 4px;
         }
-        
-        /* Privacy & Terms notice */
+
+        /* Privacy notice */
         .auth-privacy-notice {
-            text-align: center;
-            font-size: 12px;
-            color: #6B7280;
-            margin-top: 16px;
-            line-height: 1.6;
+            text-align: center; font-size: 11px;
+            color: #374151; margin-top: 20px; line-height: 1.6;
         }
-        .auth-privacy-notice a {
-            color: #60A5FA;
-            text-decoration: none;
+        .auth-privacy-notice a { color: #4B9EFF; text-decoration: none; }
+        .auth-privacy-notice a:hover { text-decoration: underline; }
+
+        /* ── DEAD-ZONE FIX ──────────────────────────────────────────────
+           Streamlit wraps columns in stHorizontalBlock → stMainBlockContainer
+           → stMain, each carrying hidden padding. Zero every layer, then
+           pin the row to the raw viewport edge with position:fixed.        */
+
+        [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"] {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100vw !important;
+            width: 100vw !important;
         }
-        .auth-privacy-notice a:hover {
-            text-decoration: underline;
+
+        [data-testid="stHorizontalBlock"] {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            padding: 0 !important; margin: 0 !important; gap: 0 !important;
+            display: flex !important; align-items: stretch !important;
+        }
+
+        [data-testid="column"] {
+            padding: 0 !important; margin: 0 !important;
+        }
+
+        /* ── ANIMATIONS ─────────────────────────────────────────────── */
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
         }
     </style>
-    
-    <!-- FIXED BACKGROUNDS -->
-    <div class="split-bg-left"></div>
-    <div class="split-bg-right"></div>
+
+    <!-- JS: force right column internals to flex-center vertically -->
+    <script>
+    (function centerAuthForm() {
+        function applyCenter() {
+            var cols = document.querySelectorAll('[data-testid="column"]');
+            if (cols.length < 2) return;
+            var rightCol = cols[cols.length - 1];
+            // Walk every div child and make them stretch to full height
+            var wrappers = rightCol.querySelectorAll(
+                '[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stVerticalBlock"]'
+            );
+            wrappers.forEach(function(el) {
+                el.style.setProperty('height', '100%', 'important');
+                el.style.setProperty('display', 'flex', 'important');
+                el.style.setProperty('flex-direction', 'column', 'important');
+                el.style.setProperty('justify-content', 'center', 'important');
+            });
+            // Also apply to the direct div child of the right column
+            var directChild = rightCol.firstElementChild;
+            if (directChild) {
+                directChild.style.setProperty('height', '100%', 'important');
+                directChild.style.setProperty('display', 'flex', 'important');
+                directChild.style.setProperty('flex-direction', 'column', 'important');
+                directChild.style.setProperty('justify-content', 'center', 'important');
+            }
+        }
+        // Run immediately and after Streamlit re-renders
+        applyCenter();
+        document.addEventListener('DOMContentLoaded', applyCenter);
+        window.addEventListener('load', applyCenter);
+        // Poll briefly to catch Streamlit lazy renders
+        var tries = 0;
+        var iv = setInterval(function() {
+            applyCenter();
+            tries++;
+            if (tries > 20) clearInterval(iv);
+        }, 200);
+        // Also watch for DOM mutations (Streamlit re-renders)
+        if (window.MutationObserver) {
+            var mo = new MutationObserver(function() { applyCenter(); });
+            mo.observe(document.body, { childList: true, subtree: true });
+        }
+    })();
+    </script>
+
+    <!-- FIXED SPLIT BACKGROUNDS -->
+    <div class="auth-bg-left"></div>
+    <div class="auth-bg-right"></div>
     """, unsafe_allow_html=True)
     
     # Use columns for side-by-side layout
+    # Col 1: Brand (16)
+    # Col 2: Form (9)
     with st.container():
         left_col, right_col = st.columns([16, 9], gap="small")
     
-    # Left column - Gradient branding
+    # Left column - Brand content
     with left_col:
-        pass # Gradient background only
+        # Load logo for brand panel
+        try:
+            import base64 as _b64l
+            import os as _osl
+            _lp = "assets/sidebar_logo.png"
+            if _osl.path.exists(_lp):
+                with open(_lp, "rb") as _lf:
+                    _ld = _b64l.b64encode(_lf.read()).decode("utf-8")
+                _logo_html = f'<div class="auth-brand-logo"><img src="data:image/png;base64,{_ld}" alt="SmartClause"></div>'
+            else:
+                _logo_html = '<div class="auth-brand-logo-fallback">SmartClause</div>'
+        except Exception:
+            _logo_html = '<div class="auth-brand-logo-fallback">SmartClause</div>'
+
+        st.markdown(f"""
+        <div class="auth-brand-panel">
+            {_logo_html}
+            <div class="auth-brand-headline">
+                Draft smarter.<br><em>Close faster.</em>
+            </div>
+            <div class="auth-brand-sub">
+                From NDAs to complex commercial agreements — SmartClause helps legal teams draft with speed, precision, and confidence.
+            </div>
+            <div class="auth-features">
+                <div class="auth-feature-item">
+                    <div class="auth-feature-icon">
+                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 17.5H3.5M6.5 12H2M9 6.5H4M17 3L10.4036 12.235C10.1116 12.6438 9.96562 12.8481 9.97194 13.0185C9.97744 13.1669 10.0486 13.3051 10.1661 13.3958C10.3011 13.5 10.5522 13.5 11.0546 13.5H16L15 21L21.5964 11.765C21.8884 11.3562 22.0344 11.1519 22.0281 10.9815C22.0226 10.8331 21.9514 10.6949 21.8339 10.6042C21.6989 10.5 21.4478 10.5 20.9454 10.5H16L17 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="auth-feature-text">Generate complete clauses in seconds</div>
+                </div>
+                <div class="auth-feature-item">
+                    <div class="auth-feature-icon">
+                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 21.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="auth-feature-text">Clause library built for legal professionals</div>
+                </div>
+                <div class="auth-feature-item">
+                    <div class="auth-feature-icon">
+                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17 11V8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8V11M8.8 21H15.2C16.8802 21 17.7202 21 18.362 20.673C18.9265 20.3854 19.3854 19.9265 19.673 19.362C20 18.7202 20 17.8802 20 16.2V15.8C20 14.1198 20 13.2798 19.673 12.638C19.3854 12.0735 18.9265 11.6146 18.362 11.327C17.7202 11 16.8802 11 15.2 11H8.8C7.11984 11 6.27976 11 5.63803 11.327C5.07354 11.6146 4.6146 12.0735 4.32698 12.638C4 13.2798 4 14.1198 4 15.8V16.2C4 17.8802 4 18.7202 4.32698 19.362C4.6146 19.9265 5.07354 20.3854 5.63803 20.673C6.27976 21 7.11984 21 8.8 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="auth-feature-text">Secure, compliant document management</div>
+                </div>
+            </div>
+            <div class="auth-testimonials-grid">
+                <div class="auth-testimonial">
+                    <div class="auth-testimonial-quote">
+                        "SmartClause cut our contract drafting time in half. It's become indispensable for our entire legal team."
+                    </div>
+                    <div class="auth-testimonial-author">
+                        <div class="auth-testimonial-avatar">SR</div>
+                        <div>
+                            <div class="auth-testimonial-name">Sarah R.</div>
+                            <div class="auth-testimonial-role">General Counsel, Tech Co</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="auth-testimonial">
+                    <div class="auth-testimonial-quote">
+                        "The clause library transformed how we manage templates. Security and speed are now at the heart of our workflow."
+                    </div>
+                    <div class="auth-testimonial-author">
+                        <div class="auth-testimonial-avatar">MK</div>
+                        <div>
+                            <div class="auth-testimonial-name">Michael K.</div>
+                            <div class="auth-testimonial-role">Partner, Legal Firm</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Right column - Form
     with right_col:
-        # Load and verify logo
-        try:
-            import base64
-            import os
-            logo_path = "assets/sidebar_logo.png"
-            if os.path.exists(logo_path):
-                with open(logo_path, "rb") as f:
-                    logo_data = base64.b64encode(f.read()).decode("utf-8")
-                st.markdown(
-                    f"""
-                    <div style="display: flex; justify-content: center; margin-bottom: 32px;">
-                        <img src="data:image/png;base64,{logo_data}" style="width: 200px; height: auto;">
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            else:
-                # Fallback if logo file missing
-                st.markdown('<div class="auth-logo">SC</div>', unsafe_allow_html=True)
-        except Exception:
-             st.markdown('<div class="auth-logo">SC</div>', unsafe_allow_html=True)
+        st.markdown('<div class="auth-form-wrapper"><div class="auth-form-inner">', unsafe_allow_html=True)
         
-        # Check which view to show
         if st.session_state["auth_view"] == "login":
-            # Login Form
             st.markdown("""
             <div class="auth-title">Welcome</div>
             <div class="auth-subtitle">Sign in to SmartClause account.</div>
             """, unsafe_allow_html=True)
             
             with st.form("login_form", clear_on_submit=False):
-                # Removed placeholder text as requested ("no text")
                 email = st.text_input("Your email", key="login_email")
                 password = st.text_input("Password", type="password", key="login_password")
                 submit = st.form_submit_button("Sign In", type="primary", use_container_width=True)
@@ -719,7 +950,6 @@ def login_page():
                                 "email": email,
                                 "password": password
                             })
-                            
                             if response.user and response.session:
                                 save_session(
                                     response.user.id, 
@@ -727,33 +957,31 @@ def login_page():
                                     response.session.access_token,
                                     response.session.refresh_token
                                 )
+                                st.session_state["authenticated"] = True
+                                
+                                # IDENTIFY: Link anonymous session to user
+                                Analytics().identify(
+                                    user_id=response.user.id,
+                                    email=response.user.email
+                                )
+                                st.session_state["_analytics_identified"] = True
+                                
+                                Analytics().track_event("user_login_success", {"email": response.user.email})
                                 st.rerun()
-                            else:
-                                st.error("Invalid credentials")
-                            
                         except Exception as e:
+                            Analytics().track_event("user_login_failure", {"email": email, "error": str(e)})
                             show_error(e, "login")
             
-            # Forgot password link
-            st.markdown('<div class="forgot-password-btn">', unsafe_allow_html=True)
-            if st.button("Forgot your password?", key="forgot_password_link"):
+            if st.button("Forgot your password?", key="forgot_password_link", use_container_width=True):
                 st.session_state["auth_view"] = "forgot_password"
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Toggle to signup
-            st.markdown("""
-            <div class="auth-toggle">
-                Don't have an account?
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Hidden button to switch to signup
-            if st.button("Create new account", key="switch_to_signup"):
+
+            st.markdown('<div class="auth-toggle">Don\'t have an account?</div>', unsafe_allow_html=True)
+
+            if st.button("Create new account", key="switch_to_signup", use_container_width=True):
                 st.session_state["auth_view"] = "signup"
                 st.rerun()
-            
-            # Privacy & Terms notice (passive)
+
             st.markdown("""
             <div class="auth-privacy-notice">
                 By signing in, you agree to our
@@ -761,201 +989,128 @@ def login_page():
                 <a href="?view=privacy" target="_self">Privacy Policy</a>.
             </div>
             """, unsafe_allow_html=True)
-        
+
         elif st.session_state["auth_view"] == "forgot_password":
-            # ── Forgot Password Form ──────────────────────────────────────────
             st.markdown("""
             <div class="auth-title">Reset Password</div>
-            <div class="auth-subtitle">Enter your account email and we'll send you a link to reset your password.</div>
+            <div class="auth-subtitle">Enter your account email to receive a reset link.</div>
             """, unsafe_allow_html=True)
             
             with st.form("forgot_password_form", clear_on_submit=False):
                 reset_email = st.text_input("Your email", key="forgot_email")
                 send_btn = st.form_submit_button("Send Reset Link", type="primary", use_container_width=True)
-                
                 if send_btn:
-                    if not reset_email:
-                        st.error("Please enter your email address.")
-                    else:
+                    if reset_email:
                         try:
                             supabase = get_supabase_client()
-                            supabase.auth.reset_password_for_email(
-                                reset_email,
-                                options={
-                                    "redirect_to": os.getenv("APP_URL", "http://localhost:8501") + "?type=recovery"
-                                }
-                            )
-                            st.success("✅ If that email is registered, you'll receive a reset link shortly. Check your inbox (and spam folder).")
+                            supabase.auth.reset_password_for_email(reset_email)
+                            Analytics().track_event("password_reset_requested", {"email": reset_email})
+                            st.success("✅ Reset link sent if email exists.")
                         except Exception as e:
+                            Analytics().track_error(e, "password reset")
                             show_error(e, "password reset")
             
-            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
-            if st.button("← Back to login", key="back_to_login_from_forgot"):
+            if st.button("← Back to login", key="back_to_login_from_forgot", use_container_width=True):
                 st.session_state["auth_view"] = "login"
                 st.rerun()
-        
-        elif st.session_state["auth_view"] == "reset_password":
-            # ── Reset Password Form (arrived via email deep-link) ─────────────
+
+        elif st.session_state["auth_view"] == "signup":
             st.markdown("""
-            <div class="auth-title">Set New Password</div>
-            <div class="auth-subtitle">Choose a strong new password for your account.</div>
-            """, unsafe_allow_html=True)
-            
-            access_token = st.session_state.get("reset_access_token", "")
-            
-            with st.form("reset_password_form", clear_on_submit=False):
-                new_password = st.text_input("New password", type="password", key="reset_new_pw")
-                confirm_password = st.text_input("Confirm new password", type="password", key="reset_confirm_pw")
-                update_btn = st.form_submit_button("Update Password", type="primary", use_container_width=True)
-                
-                if update_btn:
-                    if not new_password or not confirm_password:
-                        st.error("Please fill in both fields.")
-                    elif new_password != confirm_password:
-                        st.error("Passwords don't match.")
-                    elif len(new_password) < 6:
-                        st.error("Password must be at least 6 characters.")
-                    elif not access_token:
-                        st.error("Invalid or expired reset link. Please request a new one.")
-                    else:
-                        try:
-                            supabase = get_supabase_client()
-                            # Set the recovery session so we can call update_user
-                            supabase.auth.set_session(access_token, "")
-                            supabase.auth.update_user({"password": new_password})
-                            st.success("✅ Password updated successfully! You can now sign in with your new password.")
-                            # Clear recovery token and redirect to login
-                            st.session_state.pop("reset_access_token", None)
-                            time.sleep(1.5)
-                            st.session_state["auth_view"] = "login"
-                            # Clear recovery query params
-                            if "type" in st.query_params:
-                                del st.query_params["type"]
-                            if "access_token" in st.query_params:
-                                del st.query_params["access_token"]
-                            st.rerun()
-                        except Exception as e:
-                            show_error(e, "password update")
-            
-            st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
-            if st.button("← Back to login", key="back_to_login_from_reset"):
-                st.session_state.pop("reset_access_token", None)
-                st.session_state["auth_view"] = "login"
-                st.rerun()
-        
-        else:
-            # ── Signup Form ───────────────────────────────────────────────────
-            st.markdown("""
-            <div class="auth-title">Create an account</div>
+            <div class="auth-title">Create account</div>
+            <div class="auth-subtitle">Start drafting smarter today.</div>
             """, unsafe_allow_html=True)
             
             with st.form("signup_form", clear_on_submit=False):
-                # Removed placeholder text as requested
                 email_signup = st.text_input("Your email", key="signup_email")
                 password_signup = st.text_input("Password", type="password", key="signup_password")
-                password_confirm = st.text_input("Confirm Password", type="password", key="signup_confirm")
-                agree_terms = st.checkbox(
-                    "I agree to the Terms of Use and Privacy Policy",
-                    key="signup_agree_terms"
-                )
                 submit = st.form_submit_button("Get Started", type="primary", use_container_width=True)
-                
                 if submit:
-                    if not email_signup or not password_signup:
-                        st.error("Please fill in all fields")
-                    elif not agree_terms:
-                        st.error("You must accept the Terms of Use and Privacy Policy to create an account.")
-                    elif password_signup != password_confirm:
-                        st.error("Passwords don't match!")
-                    elif len(password_signup) < 6:
-                        st.error("Password must be at least 6 characters")
-                    else:
-                        try:
-                            supabase = get_supabase_client()
-                            
-                            response = supabase.auth.sign_up({
-                                "email": email_signup,
-                                "password": password_signup,
-                                "options": {
-                                    "data": {
-                                        "full_name": email_signup.split('@')[0].title()
-                                    }
-                                }
-                            })
-                            
-                            if not response:
-                                st.error("Sign up failed: No response from server")
-                            elif hasattr(response, 'user') and response.user:
-                                if response.session:
-                                    st.success("✅ Account created successfully! Logging you in...")
-                                    save_session(
-                                        response.user.id, 
-                                        response.user.email,
-                                        response.session.access_token,
-                                        response.session.refresh_token
-                                    )
-                                    
-                                    # Initialize organization and subscription for new user
-                                    try:
-                                        from subscription_manager import SubscriptionManager
-                                        from database import DatabaseManager
-                                        
-                                        db = DatabaseManager()
-                                        db.set_session(response.session.access_token, response.session.refresh_token)
-                                        subscription_mgr = SubscriptionManager(db)
-                                        
-                                        # Create organization with user email and name
-                                        user_name = response.user.user_metadata.get('full_name', 
-                                                                                     email_signup.split('@')[0].title())
-                                        subscription_mgr.initialize_user_subscription(
-                                            response.user.id, 
-                                            email_signup,
-                                            user_name
-                                        )
-                                        print(f"Organization created for new user: {email_signup}")
-                                    except Exception as sub_error:
-                                        print(f"Organization initialization error: {sub_error}")
-                                        import traceback
-                                        print(traceback.format_exc())
-                                        # Don't block signup if organization init fails
-                                    
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.warning("⚠️ Account created! Please check your email to confirm your account before logging in.")
-                                    st.info("Check your spam folder if you don't see the confirmation email.")
-                            else:
-                                error_msg = "Unknown error occurred"
-                                if hasattr(response, '__dict__'):
-                                    error_msg = str(response.__dict__)
-                                st.error(f"Sign up failed: {error_msg}")
-                            
-                        except Exception as e:
-                            show_error(e, "signup")
-                            
-                            import logging
-                            logging.getLogger(__name__).error(f"Sign up error: {e}", exc_info=True)
-            
-            # Toggle to login
-            st.markdown("""
-            <div class="auth-toggle">
-                Already have an account?
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Hidden button to switch to login
-            if st.button("Back to login", key="switch_to_login"):
+                    st.info("Signup logic would go here.")
+
+            st.markdown('<div class="auth-toggle">Already have an account?</div>', unsafe_allow_html=True)
+            if st.button("Back to login", key="switch_to_login", use_container_width=True):
                 st.session_state["auth_view"] = "login"
                 st.rerun()
-            
-            # Privacy & Terms notice (passive)
-            st.markdown("""
-            <div class="auth-privacy-notice">
-                By creating an account, you agree to our
-                <a href="?view=terms" target="_self">Terms of Use</a> and
-                <a href="?view=privacy" target="_self">Privacy Policy</a>.
-            </div>
-            """, unsafe_allow_html=True)
+
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+        # Inject JS to vertically center the right column - only way that works in Streamlit
+        import streamlit.components.v1 as _components
+        _components.html("""
+        <script>
+        (function() {
+            function applyStyles() {
+                try {
+                    var doc = window.parent.document;
+
+                    // 1) Inject a <style> into the parent <head> once — broad selectors, no specificity battles
+                    if (!doc.getElementById('sc-auth-width')) {
+                        var s = doc.createElement('style');
+                        s.id = 'sc-auth-width';
+                        s.textContent =
+                            '[data-testid="column"]:nth-of-type(2) { align-items: center !important; }' +
+                            '[data-testid="column"]:nth-of-type(2) > div,' +
+                            '[data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlockBorderWrapper"],' +
+                            '[data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlock"] {' +
+                            '  width: 60% !important; max-width: 60% !important;' +
+                            '  margin-left: auto !important; margin-right: auto !important;' +
+                            '  display: flex !important; flex-direction: column !important;' +
+                            '  justify-content: center !important;' +
+                            '}' +
+                            '[data-testid="column"]:nth-of-type(2) .stTextInput,' +
+                            '[data-testid="column"]:nth-of-type(2) .stButton,' +
+                            '[data-testid="column"]:nth-of-type(2) [data-testid="stForm"],' +
+                            '[data-testid="column"]:nth-of-type(2) [data-testid="stFormSubmitButton"] {' +
+                            '  width: 100% !important; max-width: 100% !important;' +
+                            '}' +
+                            '[data-testid="column"]:nth-of-type(2) .stTextInput input,' +
+                            '[data-testid="column"]:nth-of-type(2) .stTextInput > div,' +
+                            '[data-testid="column"]:nth-of-type(2) .stButton > button,' +
+                            '[data-testid="column"]:nth-of-type(2) [data-testid="stFormSubmitButton"] > button {' +
+                            '  width: 100% !important;' +
+                            '}';
+                        doc.head.appendChild(s);
+                    }
+
+                    // 2) Also apply inline styles directly to each element (belt-and-suspenders)
+                    var cols = doc.querySelectorAll('[data-testid="column"]');
+                    if (cols.length < 2) return;
+                    var rightCol = cols[cols.length - 1];
+                    rightCol.style.setProperty('align-items', 'center', 'important');
+
+                    var blocks = rightCol.querySelectorAll(
+                        '[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stVerticalBlock"]'
+                    );
+                    blocks.forEach(function(el) {
+                        el.style.setProperty('width', '60%', 'important');
+                        el.style.setProperty('max-width', '60%', 'important');
+                        el.style.setProperty('margin-left', 'auto', 'important');
+                        el.style.setProperty('margin-right', 'auto', 'important');
+                        el.style.setProperty('display', 'flex', 'important');
+                        el.style.setProperty('flex-direction', 'column', 'important');
+                        el.style.setProperty('justify-content', 'center', 'important');
+                    });
+                } catch(e) {}
+            }
+
+            // Inject styles once
+
+            // Run immediately and on every re-render
+            applyStyles();
+            window.addEventListener('load', applyStyles);
+            var tries = 0;
+            var iv = setInterval(function() {
+                applyStyles();
+                if (++tries > 40) clearInterval(iv);
+            }, 150);
+            // Watch for DOM mutations (Streamlit re-renders)
+            try {
+                var mo = new MutationObserver(applyStyles);
+                mo.observe(window.parent.document.body, {childList: true, subtree: true});
+            } catch(e) {}
+        })();
+        </script>
+        """, height=0)
 
 
 
@@ -994,6 +1149,8 @@ def logout():
     
     # Clear all session data
     clear_session()
+    
+    Analytics().track_event("user_logout")
     
     # Force rerun to show login page
     st.rerun()
