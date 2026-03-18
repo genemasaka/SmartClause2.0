@@ -3,6 +3,7 @@ from typing import Dict, Any, List
 from datetime import date
 import json
 from analytics import Analytics
+import os
 
 class DateJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles date and datetime objects."""
@@ -889,7 +890,11 @@ def render_new_matter_modal():
                             "subtype": selected_subtype if selected_subtype != doc_type else None,
                             "variables": dynamic_values,
                         },
-                        "generation_config": {"jurisdiction": "Kenya", "language": "English", "model": "gpt-4o-mini"}
+                        "generation_config": {
+                            "jurisdiction": "Kenya", 
+                            "language": "English", 
+                            "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                        }
                     }
                     
                     from database import DatabaseManager

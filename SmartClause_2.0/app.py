@@ -603,44 +603,68 @@ def render_matters():
         with st.popover("Filter", use_container_width=True):
             st.markdown("**Filter Matters**")
             
+            # --- Expanded Filter Categories ---
+            STATUS_OPTIONS = ["all", "active", "review", "completed", "archived", "on_hold", "pending"]
+            
+            # Pre-defined Matter Types (Legal Practice Areas)
+            PREDEFINED_TYPES = [
+                "Corporate", "Real Estate", "Employment", "Litigation", 
+                "Intellectual Property", "Family Law", "Probate & Estate", 
+                "Commercial", "Banking & Finance", "Tax", "Immigration", 
+                "Criminal", "Insurance", "Environmental", "General"
+            ]
+            
+            # Pre-defined Jurisdictions
+            PREDEFINED_JURISDICTIONS = [
+                "Kenya", "Uganda", "Tanzania", "Rwanda", "United Kingdom", 
+                "United States", "South Africa", "Nigeria", "United Arab Emirates", 
+                "Global", "Other"
+            ]
+            # ----------------------------------
+
             # Get all matters to extract unique values (limit to 100 to get a good sample)
             all_matters = db.get_matters(limit=100)
             
-            # Extract unique matter types and jurisdictions
-            matter_types = sorted(list(set([m.get("matter_type", "General") for m in all_matters])))
-            jurisdictions = sorted(list(set([m["jurisdiction"] for m in all_matters])))
+            # Extract unique matter types and jurisdictions from DB
+            db_matter_types = [m.get("matter_type", "General") for m in all_matters]
+            db_jurisdictions = [m["jurisdiction"] for m in all_matters]
+            
+            # Merge and deduplicate
+            matter_types = sorted(list(set(PREDEFINED_TYPES + db_matter_types)))
+            jurisdictions = sorted(list(set(PREDEFINED_JURISDICTIONS + db_jurisdictions)))
             
             # Status filter
+            current_status = st.session_state.get("filter_status", "all")
+            status_index = STATUS_OPTIONS.index(current_status) if current_status in STATUS_OPTIONS else 0
+            
             status_filter = st.selectbox(
                 "Status",
-                options=["all", "active", "review"],
-                index=["all", "active", "review"].index(st.session_state["filter_status"]),
+                options=STATUS_OPTIONS,
+                index=status_index,
                 key="status_select"
             )
             
             # Matter type filter
             matter_type_options = ["all"] + matter_types
-            current_type_index = 0
-            if st.session_state["filter_matter_type"] in matter_type_options:
-                current_type_index = matter_type_options.index(st.session_state["filter_matter_type"])
+            current_type = st.session_state.get("filter_matter_type", "all")
+            type_index = matter_type_options.index(current_type) if current_type in matter_type_options else 0
             
             matter_type_filter = st.selectbox(
                 "Matter Type",
                 options=matter_type_options,
-                index=current_type_index,
+                index=type_index,
                 key="matter_type_select"
             )
             
             # Jurisdiction filter
             jurisdiction_options = ["all"] + jurisdictions
-            current_jurisdiction_index = 0
-            if st.session_state["filter_jurisdiction"] in jurisdiction_options:
-                current_jurisdiction_index = jurisdiction_options.index(st.session_state["filter_jurisdiction"])
+            current_jurisdiction = st.session_state.get("filter_jurisdiction", "all")
+            juris_index = jurisdiction_options.index(current_jurisdiction) if current_jurisdiction in jurisdiction_options else 0
             
             jurisdiction_filter = st.selectbox(
                 "Jurisdiction",
                 options=jurisdiction_options,
-                index=current_jurisdiction_index,
+                index=juris_index,
                 key="jurisdiction_select"
             )
             

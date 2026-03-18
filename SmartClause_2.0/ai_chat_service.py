@@ -130,7 +130,7 @@ REASON: [brief explanation]
         user_message: str,
         document_context: str,
         conversation_history: List[Dict[str, str]],
-        model: str = "gpt-4o-mini",
+        model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         temperature: float = 0.3
     ) -> Generator[str, None, None]:
         """

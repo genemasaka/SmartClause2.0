@@ -115,8 +115,18 @@ def render_edit_matter_modal(matter: Dict[str, Any], db: DatabaseManager):
         col1, col2 = st.columns(2)
         
         with col1:
-            matter_types = ["General", "Contract", "Litigation", "Corporate", "Real Estate", "Employment", "Intellectual Property"]
+            matter_types = [
+                "Corporate", "Real Estate", "Employment", "Litigation", 
+                "Intellectual Property", "Family Law", "Probate & Estate", 
+                "Commercial", "Banking & Finance", "Tax", "Immigration", 
+                "Criminal", "Insurance", "Environmental", "General"
+            ]
             current_type = matter.get("matter_type", "General")
+            
+            # Ensure current_type is in the list even if it's custom
+            if current_type and current_type not in matter_types:
+                matter_types.append(current_type)
+                
             type_index = matter_types.index(current_type) if current_type in matter_types else 0
             
             matter_type = st.selectbox(
@@ -127,8 +137,17 @@ def render_edit_matter_modal(matter: Dict[str, Any], db: DatabaseManager):
             )
         
         with col2:
-            jurisdictions = ["Kenya", "Uganda", "Tanzania", "Rwanda", "United States", "United Kingdom", "Other"]
+            jurisdictions = [
+                "Kenya", "Uganda", "Tanzania", "Rwanda", "United Kingdom", 
+                "United States", "South Africa", "Nigeria", "United Arab Emirates", 
+                "Global", "Other"
+            ]
             current_jurisdiction = matter.get("jurisdiction", "Kenya")
+            
+            # Ensure current_jurisdiction is in the list
+            if current_jurisdiction and current_jurisdiction not in jurisdictions:
+                jurisdictions.append(current_jurisdiction)
+                
             jurisdiction_index = jurisdictions.index(current_jurisdiction) if current_jurisdiction in jurisdictions else 0
             
             jurisdiction = st.selectbox(
@@ -138,8 +157,13 @@ def render_edit_matter_modal(matter: Dict[str, Any], db: DatabaseManager):
                 key="edit_jurisdiction"
             )
         
-        statuses = ["active", "review", "archived"]
+        statuses = ["active", "review", "completed", "archived", "on_hold", "pending"]
         current_status = matter.get("status", "active")
+        
+        # Ensure current_status is in the list
+        if current_status and current_status not in statuses:
+            statuses.append(current_status)
+            
         status_index = statuses.index(current_status) if current_status in statuses else 0
         
         status = st.selectbox(

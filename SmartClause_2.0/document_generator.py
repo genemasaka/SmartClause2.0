@@ -393,9 +393,9 @@ Generate the document now."""
         """Stream document generation with optimized prompt."""
         try:
             cfg = payload.get("generation_config", {}) or {}
-            model = cfg.get("model", "gpt-4o-mini")
-            temperature = float(cfg.get("temperature", 0.3))
-            max_tokens = int(cfg.get("max_tokens", 6000))
+            model = cfg.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            temperature = float(cfg.get("temperature", os.getenv("OPENAI_TEMPERATURE", 0.3)))
+            max_tokens = int(cfg.get("max_tokens", os.getenv("OPENAI_MAX_TOKENS", 6000)))
 
             messages = self.build_messages(payload)
 
