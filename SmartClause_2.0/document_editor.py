@@ -1426,45 +1426,49 @@ def render_document_editor():
         # Create a placeholder for loading animation
         loading_placeholder = st.empty()
         
-        # Render the loading animation using the function
+        # Render the loading animation using the function (KEEPING AS REQUESTED)
         with loading_placeholder.container():
             _render_loading_animation()
         
-        # Force a small delay to ensure the animation renders
-        time.sleep(0.2)
-        
-        # Now fetch the data while loading animation is visible
+        # Now fetch the data while loading animation is visible using parallel threads for speed
         try:
-            # OPTIMIZATION: Use light_mode=True to fetch only metadata initially
-            clauses_data = _get_clauses_for_editor(db, light_mode=True)
-            document = db.get_document(document_id)
+            import concurrent.futures
             
-            if not document:
-                loading_placeholder.empty()
-                st.error(f"Document with ID {document_id} not found in database")
-                st.markdown(f"""
-                <div style="padding: 40px; text-align: center;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">🔍</div>
-                    <h3 style="color: #FFFFFF; margin-bottom: 12px;">Document Not Found</h3>
-                    <p style="color: #9BA1B0; margin-bottom: 24px;">
-                        This document may have been deleted or you may not have permission to access it.
-                    </p>
-                    <a href="?view=matters{session_param}" target="_self" class="sc-btn sc-btn-primary" style="display: inline-block;">
-                        ← Back to Matters
-                    </a>
-                </div>
-                """, unsafe_allow_html=True)
-                return
-            
-            matter_id = document['matter_id']
-            matter = db.get_matter(matter_id)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                # Start parallel requests
+                future_clauses = executor.submit(_get_clauses_for_editor, db, light_mode=True)
+                future_doc = executor.submit(db.get_document, document_id)
+                future_version = executor.submit(db.get_latest_version, document_id)
+                
+                # Wait for document first to get matter_id
+                document = future_doc.result()
+                
+                if not document:
+                    loading_placeholder.empty()
+                    st.error(f"Document with ID {document_id} not found or access denied")
+                    st.markdown(f"""
+                    <div style="padding: 40px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🔍</div>
+                        <h3 style="color: #FFFFFF; margin-bottom: 12px;">Document Not Found</h3>
+                        <p style="color: #9BA1B0; margin-bottom: 24px;">This document may have been deleted or moved.</p>
+                        <a href="?view=matters{session_param}" target="_self" class="sc-btn sc-btn-primary" style="display: inline-block;">← Back to Matters</a>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    return
+                
+                # Matter depends on document['matter_id']
+                matter_id = document['matter_id']
+                future_matter = executor.submit(db.get_matter, matter_id)
+                
+                # Gather all other results
+                clauses_data = future_clauses.result()
+                latest_version = future_version.result()
+                matter = future_matter.result()
             
             if not matter:
                 loading_placeholder.empty()
-                st.error("Matter not found")
+                st.error("Linked Matter not found")
                 return
-            
-            latest_version = db.get_latest_version(document_id)
             
             # Cache the loaded data
             st.session_state[cache_key] = {
@@ -1474,10 +1478,15 @@ def render_document_editor():
                 'latest_version': latest_version
             }
             
-            Analytics().track_event("document_loaded", {"document_id": document_id})
+            Analytics().track_event("document_loaded_parallel", {"document_id": document_id})
             
             # Clear loading animation
             loading_placeholder.empty()
+            
+        except Exception as e:
+            loading_placeholder.empty()
+            show_error(e, "document_loading")
+            return
             
         except Exception as e:
             loading_placeholder.empty()
@@ -2003,6 +2012,9 @@ def render_document_editor():
         
         if st.session_state.get("show_major_version_modal", False):
             _render_major_version_modal(db, document_id)
+        
+        # Add margin at the very bottom to prevent "squeezed" UI at the viewport edge
+        st.markdown("<div style='margin-bottom: 80px;'></div>", unsafe_allow_html=True)
 
 
 # ============================================================================

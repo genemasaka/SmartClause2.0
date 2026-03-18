@@ -394,10 +394,11 @@ class DatabaseManager:
         OPTIMIZATION: By default, excludes large content fields.
         """
         try:
+            # We must avoid the relational join (!) as it seems the FK constraint is missing in the DB schema
+            # causing PGRST200 error. We will fetch basic metadata and handle counts/latest versions in Python.
             if include_content:
                 query = self.client.table("documents").select("*")
             else:
-                # Select only light metadata fields
                 query = self.client.table("documents").select("id,matter_id,title,document_type,document_subtype,status,created_at,updated_at,current_version_id")
                 
             result = query.eq("matter_id", matter_id).is_("deleted_at", None).order("created_at", desc=True).execute()
@@ -418,6 +419,25 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error fetching document {document_id}: {e}")
             return None
+            
+    def delete_document(self, document_id: str, hard_delete: bool = False) -> bool:
+        """Delete a document (soft delete by default)."""
+        try:
+            if hard_delete:
+                self.client.table("documents").delete().eq("id", document_id).execute()
+            else:
+                self.client.table("documents").update({"deleted_at": datetime.now().isoformat()}).eq("id", document_id).execute()
+            
+            self._log_activity(
+                "deleted_document",
+                "document",
+                document_id,
+                "Hard deleted document" if hard_delete else "Soft deleted document"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting document {document_id}: {e}")
+            return False
     
     def update_document_status(
         self,
@@ -630,6 +650,19 @@ class DatabaseManager:
         
         except Exception as e:
             logger.error(f"Error fetching versions: {e}")
+            return []
+            
+    def bulk_get_versions(self, document_ids: List[str]) -> List[Dict[str, Any]]:
+        """Get all versions for multiple documents in one query."""
+        if not document_ids:
+            return []
+        try:
+            result = self.client.table("document_versions").select(
+                "id,document_id,version_number,label,word_count,created_by,created_at,is_major_version,change_summary,content_plain"
+            ).in_("document_id", document_ids).order("version_number", desc=True).execute()
+            return result.data
+        except Exception as e:
+            logger.error(f"Error bulk fetching versions: {e}")
             return []
     
     def get_latest_version(self, document_id: str) -> Optional[Dict[str, Any]]:

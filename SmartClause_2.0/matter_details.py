@@ -295,7 +295,38 @@ def render_matter_details():
     st.session_state["current_matter"] = matter
     
     # OPTIMIZATION: Don't load full content for the list view
-    all_documents = db.get_documents(matter_id, include_content=False)
+    # Fetch documents with metadata in one go (already optimized in db.get_documents)
+    # Check if we have cached documents for this matter to avoid re-fetching on small UI changes
+    cache_key = f"docs_{matter_id}"
+    if cache_key not in st.session_state or st.session_state.get("_refresh_docs"):
+        all_documents = db.get_documents(matter_id, include_content=False)
+        
+        # OPTIMIZATION: Bulk fetch all versions for these documents in one query
+        # to avoid N+1 queries during rendering.
+        doc_ids = [d['id'] for d in all_documents]
+        all_vers = db.bulk_get_versions(doc_ids)
+        
+        # Group versions by document_id
+        vers_by_doc = {}
+        for v in all_vers:
+            did = v['document_id']
+            if did not in vers_by_doc:
+                vers_by_doc[did] = []
+            vers_by_doc[did].append(v)
+            
+        # Enrich documents with version metadata
+        for d in all_documents:
+            did = d['id']
+            d_vers = vers_by_doc.get(did, [])
+            d['all_versions'] = d_vers
+            # Bulk query is ordered by version_number desc, so index 0 is latest
+            d['version_metadata'] = d_vers[0] if d_vers else {}
+            
+        st.session_state[cache_key] = all_documents
+        st.session_state["_refresh_docs"] = False
+    else:
+        all_documents = st.session_state[cache_key]
+        
     documents = [d for d in all_documents if d.get("document_type") != "uploaded_file"]
     uploaded_files = [d for d in all_documents if d.get("document_type") == "uploaded_file"]
     
@@ -484,10 +515,13 @@ def render_matter_details():
             if button_state_key not in st.session_state:
                 st.session_state[button_state_key] = doc_id
             
-            versions = db.get_versions(doc_id)
-            version_count = len(versions)
-            latest_version = db.get_latest_version(doc_id)
-            word_count = latest_version.get('word_count', 0) if latest_version else 0
+            # Use pre-fetched metadata from the optimized join
+            version_metadata = doc.get("version_metadata", {})
+            word_count = version_metadata.get('word_count', 0) if version_metadata else 0
+            
+            # version_count comes from the 'all_versions' join
+            ver_info = doc.get("all_versions", [])
+            version_count = len(ver_info) if ver_info and isinstance(ver_info, list) else 1
             
             st.markdown(f"""
 <a href="?view=editor&document_id={doc_id}&matter_id={matter_id}{session_param}" target="_self" style="text-decoration: none; display: block; color: inherit; margin-bottom: 12px;">
@@ -599,6 +633,7 @@ def render_matter_details():
                 with st.spinner("Uploading..."):
                     result = db.upload_matter_file(matter_id, uploaded_file.name, mime_type, base64_data)
                     if result:
+                        st.session_state["_refresh_docs"] = True
                         st.success("File uploaded successfully!")
                         import time
                         time.sleep(0.5)
@@ -609,6 +644,25 @@ def render_matter_details():
     if uploaded_files:
         @st.dialog("View Attached File")
         def view_attached_file_dialog(fdoc, db):
+            st.markdown("""
+                <style>
+                /* Target the delete button in the 2nd column of the horizontal block inside the dialog */
+                div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button {
+                    background-color: #EF4444 !important;
+                    border-color: #EF4444 !important;
+                    color: white !important;
+                }
+                div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button p {
+                    color: white !important;
+                }
+                div[data-testid="stDialog"] div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:nth-child(2) button:hover {
+                    background-color: #DC2626 !important;
+                    border-color: #DC2626 !important;
+                    color: white !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
             with st.spinner("Loading file..."):
                 latest_version = db.get_latest_version(fdoc["id"])
                 
@@ -617,13 +671,32 @@ def render_matter_details():
                 file_data = base64.b64decode(latest_version["content"])
                 mime_type = latest_version.get("content_plain", "application/octet-stream")
                 
-                st.download_button(
-                    label="Download File",
-                    data=file_data,
-                    file_name=fdoc.get("title", "download"),
-                    mime=mime_type,
-                    key=f"dl_dialog_{fdoc['id']}"
-                )
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    st.download_button(
+                        label="Download File",
+                        data=file_data,
+                        file_name=fdoc.get("title", "download"),
+                        mime=mime_type,
+                        key=f"dl_dialog_{fdoc['id']}",
+                        use_container_width=True
+                    )
+                with col_btn2:
+                    if st.button(
+                        "Delete File", 
+                        key=f"del_dialog_{fdoc['id']}", 
+                        use_container_width=True,
+                        help="Permanently delete this uploaded file"
+                    ):
+                        with st.spinner("Deleting..."):
+                            if hasattr(db, "delete_document"):
+                                db.delete_document(fdoc["id"])
+                            st.success("File deleted! Refreshing...")
+                            import time
+                            time.sleep(0.5)
+                            import streamlit.components.v1 as components
+                            components.html("<script>window.parent.location.reload();</script>", height=0, width=0)
+                            st.stop()
                 
                 if mime_type.startswith("image/"):
                     st.image(file_data, use_container_width=True)
