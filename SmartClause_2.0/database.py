@@ -436,6 +436,63 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error updating document status: {e}")
             return None
+            
+    def upload_matter_file(
+        self,
+        matter_id: str,
+        file_name: str,
+        mime_type: str,
+        base64_data: str
+    ) -> Optional[Dict[str, Any]]:
+        """Upload a file to a matter by storing as base64 document."""
+        try:
+            # 1. Create document entry
+            doc_data = {
+                "matter_id": matter_id,
+                "title": file_name,
+                "document_type": "uploaded_file",
+                "document_subtype": mime_type,
+                "status": "final"
+            }
+            doc_result = self.client.table("documents").insert(doc_data).execute()
+            if not doc_result.data:
+                return None
+                
+            document_id = doc_result.data[0]["id"]
+            
+            # 2. Create version entry with base64 content
+            ver_data = {
+                "document_id": document_id,
+                "version_number": 1,
+                "label": "Original Upload",
+                "content": base64_data,
+                "content_plain": mime_type,
+                "word_count": 0,
+                "created_by": self.user_id,
+                "is_major_version": True
+            }
+            ver_result = self.client.table("document_versions").insert(ver_data).execute()
+            
+            if ver_result.data:
+                version_id = ver_result.data[0]["id"]
+                # Update document's current_version_id
+                self.client.table("documents").update({
+                    "current_version_id": version_id,
+                    "last_edited_at": datetime.now().isoformat()
+                }).eq("id", document_id).execute()
+            
+            self._log_activity(
+                "uploaded_file",
+                "document",
+                document_id,
+                f"Uploaded file: {file_name}"
+            )
+            
+            return doc_result.data[0]
+            
+        except Exception as e:
+            logger.error(f"Error uploading matter file: {e}")
+            return None
     
 
     def create_comment(

@@ -868,7 +868,7 @@ def login_page():
                 Draft smarter.<br><em>Close faster.</em>
             </div>
             <div class="auth-brand-sub">
-                From NDAs to complex commercial agreements — SmartClause helps legal teams draft with speed, precision, and confidence.
+                From complex commercial agreements to affidavits — SmartClause helps legal teams draft with speed, precision, and confidence.
             </div>
             <div class="auth-features">
                 <div class="auth-feature-item">
@@ -877,7 +877,7 @@ def login_page():
                             <path d="M9 17.5H3.5M6.5 12H2M9 6.5H4M17 3L10.4036 12.235C10.1116 12.6438 9.96562 12.8481 9.97194 13.0185C9.97744 13.1669 10.0486 13.3051 10.1661 13.3958C10.3011 13.5 10.5522 13.5 11.0546 13.5H16L15 21L21.5964 11.765C21.8884 11.3562 22.0344 11.1519 22.0281 10.9815C22.0226 10.8331 21.9514 10.6949 21.8339 10.6042C21.6989 10.5 21.4478 10.5 20.9454 10.5H16L17 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
-                    <div class="auth-feature-text">Generate complete clauses in seconds</div>
+                    <div class="auth-feature-text">Generate complete documents in seconds</div>
                 </div>
                 <div class="auth-feature-item">
                     <div class="auth-feature-icon">
@@ -967,7 +967,32 @@ def login_page():
                                 st.session_state["_analytics_identified"] = True
                                 
                                 Analytics().track_event("user_login_success", {"email": response.user.email})
+                                
+                                # ── INSTANT UI WIPE ──────────────────────────────────────
+                                # Inject a full-screen overlay BEFORE st.rerun() so the
+                                # auth form is visually hidden the instant the button fires.
+                                # st.stop() then halts the rest of this script run so
+                                # Streamlit never renders the sidebar or app content —
+                                # the next clean run (via rerun) will show the main app.
+                                st.markdown("""
+                                    <style>
+                                    [data-testid="stAppViewContainer"],
+                                    [data-testid="stSidebar"],
+                                    section.main, .block-container {
+                                        visibility: hidden !important;
+                                        opacity: 0 !important;
+                                    }
+                                    body::after {
+                                        content: '';
+                                        position: fixed;
+                                        inset: 0;
+                                        background: #000000;
+                                        z-index: 2147483647;
+                                    }
+                                    </style>
+                                """, unsafe_allow_html=True)
                                 st.rerun()
+                                st.stop()  # Halt this script run — next run will be the clean main app
                         except Exception as e:
                             Analytics().track_event("user_login_failure", {"email": email, "error": str(e)})
                             show_error(e, "login")

@@ -57,6 +57,36 @@ footer {
   display: none;
 }
 
+/* ── REMOVE FOCUS RINGS GLOBALLY ────────────────────────────── */
+button:focus, 
+input:focus, 
+textarea:focus, 
+select:focus,
+div:focus,
+a:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Streamlit Specific Component Overrides */
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stSelectbox"] div[data-baseweb="select"]:focus,
+[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Stop buttons and other interactive elements from glowing/outlining */
+.stButton button:focus,
+.stButton button:active,
+[data-testid="stExpander"] summary:focus {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
 /* --------------------
    Sidebar Base
 -------------------- */

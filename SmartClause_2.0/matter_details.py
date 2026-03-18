@@ -295,7 +295,9 @@ def render_matter_details():
     st.session_state["current_matter"] = matter
     
     # OPTIMIZATION: Don't load full content for the list view
-    documents = db.get_documents(matter_id, include_content=False)
+    all_documents = db.get_documents(matter_id, include_content=False)
+    documents = [d for d in all_documents if d.get("document_type") != "uploaded_file"]
+    uploaded_files = [d for d in all_documents if d.get("document_type") == "uploaded_file"]
     
     status_class = "active" if matter["status"] == "active" else "review"
     session_param = get_session_param()
@@ -544,6 +546,114 @@ def render_matter_details():
             st.session_state["existing_matter_id"] = matter_id
             st.rerun()
     
+    st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
+    
+    # ==================== ATTACHED FILES SECTION ====================
+    st.markdown(f"""
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color: #4B9EFF;">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h2 style="font-size: 18px; font-weight: 600; color: #FFFFFF; margin: 0;">Attached Files ({len(uploaded_files)})</h2>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    with st.container():
+        # CSS to style the file uploader to match document cards (#1A1D24) and button (#4B9EFF)
+        st.markdown("""
+        <style>
+            [data-testid="stFileUploaderDropzone"] {
+                background-color: #1A1D24 !important;
+                border: 1px dashed #252930 !important;
+                border-radius: 12px !important;
+            }
+            [data-testid="stFileUploader"] label,
+            [data-testid="stFileUploaderDropzone"],
+            [data-testid="stFileUploaderDropzone"] div,
+            [data-testid="stFileUploaderDropzone"] small {
+                color: #FFFFFF !important;
+            }
+            [data-testid="stFileUploaderDropzone"] button {
+                background-color: #4B9EFF !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 8px !important;
+                font-weight: 500 !important;
+            }
+            [data-testid="stFileUploaderDropzone"] button:hover {
+                background-color: #3A8AE0 !important;
+                color: white !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        uploaded_file = st.file_uploader("Upload a new file (ID, KRA PIN, doc, etc.)", type=["png", "jpg", "jpeg", "pdf"], key="matter_file_uploader")
+        if uploaded_file is not None:
+            if st.button("Save Uploaded File", type="primary"):
+                import base64
+                file_bytes = uploaded_file.getvalue()
+                base64_data = base64.b64encode(file_bytes).decode('utf-8')
+                mime_type = uploaded_file.type
+                
+                with st.spinner("Uploading..."):
+                    result = db.upload_matter_file(matter_id, uploaded_file.name, mime_type, base64_data)
+                    if result:
+                        st.success("File uploaded successfully!")
+                        import time
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("Failed to upload file.")
+
+    if uploaded_files:
+        @st.dialog("View Attached File")
+        def view_attached_file_dialog(fdoc, db):
+            with st.spinner("Loading file..."):
+                latest_version = db.get_latest_version(fdoc["id"])
+                
+            if latest_version and latest_version.get("content"):
+                import base64
+                file_data = base64.b64decode(latest_version["content"])
+                mime_type = latest_version.get("content_plain", "application/octet-stream")
+                
+                st.download_button(
+                    label="Download File",
+                    data=file_data,
+                    file_name=fdoc.get("title", "download"),
+                    mime=mime_type,
+                    key=f"dl_dialog_{fdoc['id']}"
+                )
+                
+                if mime_type.startswith("image/"):
+                    st.image(file_data, use_container_width=True)
+            else:
+                st.error("File content not found.")
+
+        for fdoc in uploaded_files:
+            fdoc_id = fdoc['id']
+            created_ago = get_time_ago(fdoc.get("created_at"))
+            
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid #252930; border-radius: 8px; margin-bottom: 8px;">
+                  <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(255, 255, 255, 0.05); flex-shrink: 0;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-size: 14px; font-weight: 500; color: #FFFFFF;">{fdoc.get("title", "Untitled")}</div>
+                    <div style="font-size: 12px; color: #6B7280;">Uploaded {created_ago}</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown('<div style="margin-top: 14px;"></div>', unsafe_allow_html=True)
+                if st.button("View", key=f"view_doc_{fdoc_id}", use_container_width=True):
+                    view_attached_file_dialog(fdoc, db)
+
     st.markdown('<div style="margin-top: 40px;"></div>', unsafe_allow_html=True)
     
     st.markdown("""

@@ -18,7 +18,7 @@ from analytics import Analytics
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
 st.set_page_config(
-    page_title="SmartClause – Legal Drafting Assistant",
+    page_title="SmartClause",
     page_icon="assets/smartclause_badge.png",
     layout="wide",
     initial_sidebar_state="collapsed",

@@ -56,29 +56,54 @@ def render_clause_library():
         return
 
 
-    # Page header
-    st.markdown("""
-    <div class="sc-main-header">
+    # Page header with 'Add New Clause' button
+    col_title, col_btn = st.columns([3, 1])
+    with col_title:
+        st.markdown("""
         <div class="sc-header-left">
             <div class="sc-page-title">Clause Library</div>
             <div class="sc-page-subtitle">Reusable clauses and precedents</div>
         </div>
-        <div class="sc-header-right">
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
-    # Action buttons
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        search_query = st.text_input("🔍 Search clauses", placeholder="Search by title, category, or tags...", label_visibility="collapsed")
-    with col2:
-        category_filter = st.selectbox("Filter by Category", ["All", "Boilerplate", "Protection", "Warranties", "Definitions", "Payment Terms", "Termination", "Other"], label_visibility="collapsed")
-    with col3:
+    with col_btn:
+        st.markdown('<div style="margin-top: 24px; float: right;">', unsafe_allow_html=True)
         if st.button("Add New Clause", use_container_width=True, type="primary"):
             Analytics().track_event("clause_add_initiated")
             st.session_state.show_add_clause_form = True
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Action buttons - aligned with content, width reduced by 40%, and height reduced by 20%
+    st.markdown("""
+    <style>
+    div[data-testid="stTextInput"] input {
+        height: 32px !important;
+        min-height: 32px !important;
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
+        font-size: 14px !important;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        height: 32px !important;
+        min-height: 32px !important;
+        display: flex;
+        align-items: center;
+    }
+    div[data-testid="stSelectbox"] [data-testid="stMarkdownContainer"] p {
+        font-size: 14px !important;
+        line-height: normal !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_spacer, col_content, col_empty = st.columns([0.035, 0.48, 0.485])
+    with col_content:
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            search_query = st.text_input("🔍 Search clauses", placeholder="Search by title, category, or tags...", label_visibility="collapsed")
+        with col2:
+            category_filter = st.selectbox("Filter by Category", ["All", "Boilerplate", "Protection", "Warranties", "Definitions", "Payment Terms", "Termination", "Other"], label_visibility="collapsed")
     
     # Get clauses from database
     all_clauses = db.get_clauses(include_system=True)
@@ -101,16 +126,18 @@ def render_clause_library():
     pinned = [c for c in filtered_clauses if c.get("is_pinned", False)]
     others = [c for c in filtered_clauses if not c.get("is_pinned", False)]
     
-    # Stats summary
-    st.markdown(f"""
-    <div style="padding: 16px 32px; background: rgba(75, 158, 255, 0.1); border-radius: 8px; margin: 16px 32px;">
-        <div style="color: #FFFFFF; font-size: 14px;">
-            📚 <strong>{len(all_clauses)}</strong> total clauses  •  
-            📌 <strong>{len(pinned)}</strong> pinned  •  
-            🔍 <strong>{len(filtered_clauses)}</strong> matching filters
+    # Stats summary - matching width of clause cards (which use columns [20, 1])
+    col_stats, _ = st.columns([20, 1])
+    with col_stats:
+        st.markdown(f"""
+        <div style="padding: 16px 32px; background: rgba(75, 158, 255, 0.1); border-radius: 8px; margin: 16px 32px;">
+            <div style="color: #FFFFFF; font-size: 14px;">
+                📚 <strong>{len(all_clauses)}</strong> total clauses  •  
+                📌 <strong>{len(pinned)}</strong> pinned  •  
+                🔍 <strong>{len(filtered_clauses)}</strong> matching filters
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     # Render pinned section
     if pinned:
