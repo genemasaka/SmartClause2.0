@@ -287,19 +287,23 @@ class OrganizationManager:
                 raise ValueError("Cannot remove organization owner")
         
         # Update member status
-        query = """
-        UPDATE organization_members
-        SET status = 'suspended'
-        WHERE organization_id = %s AND user_id = %s
-        RETURNING id
-        """
-        
-        result = self.db.execute_query(query, (organization_id, user_id))
+        try:
+            supabase = getattr(self.db, 'client', getattr(self.db, 'supabase', None))
+            if not supabase:
+                return False
+                
+            result = list(supabase.table("organization_members").update(
+                {"status": "suspended"}
+            ).eq("organization_id", organization_id).eq("user_id", user_id).execute().data)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to remove organization member: {e}")
+            return False
         
         # Update seats_used count
         self._update_seats_used(organization_id)
         
-        return bool(result)
+        return True
     
     def get_organization_members(
         self,
@@ -338,15 +342,20 @@ class OrganizationManager:
         if new_role not in ['admin', 'member']:
             raise ValueError("Role must be 'admin' or 'member'")
         
-        query = """
-        UPDATE organization_members
-        SET role = %s
-        WHERE organization_id = %s AND user_id = %s AND role != 'owner'
-        RETURNING id
-        """
-        
-        result = self.db.execute_query(query, (new_role, organization_id, user_id))
-        return bool(result)
+        try:
+            supabase = getattr(self.db, 'client', getattr(self.db, 'supabase', None))
+            if not supabase:
+                return False
+                
+            result = list(supabase.table("organization_members").update(
+                {"role": new_role}
+            ).eq("organization_id", organization_id).eq("user_id", user_id).neq("role", "owner").execute().data)
+            
+            return len(result) > 0
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to update member role: {e}")
+            return False
     
     def get_organization_subscription(self, organization_id: str) -> Optional[Dict]:
         """
@@ -402,16 +411,32 @@ class OrganizationManager:
         if additional_seats < 1:
             raise ValueError("Must add at least 1 seat")
         
-        query = """
-        UPDATE organization_subscriptions
-        SET seats_purchased = seats_purchased + %s,
-            updated_at = NOW()
-        WHERE organization_id = %s
-        RETURNING id, seats_purchased, seats_used, price_per_seat
-        """
-        
-        result = self.db.execute_query(query, (additional_seats, organization_id))
-        return result[0] if result else None
+        try:
+            supabase = getattr(self.db, 'client', getattr(self.db, 'supabase', None))
+            if not supabase:
+                return None
+                
+            # First fetch current subscription to calculate new total
+            sub_res = supabase.table("organization_subscriptions").select("*").eq("organization_id", organization_id).execute()
+            if not sub_res.data:
+                return None
+                
+            current_seats = sub_res.data[0].get("seats_purchased", 0)
+            new_seats = current_seats + additional_seats
+            
+            from datetime import datetime
+            
+            # Update the subscription
+            result = list(supabase.table("organization_subscriptions").update({
+                "seats_purchased": new_seats,
+                "updated_at": datetime.now().isoformat()
+            }).eq("organization_id", organization_id).execute().data)
+            
+            return result[0] if result else None
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to add seats: {e}")
+            return None
     
     def _update_seats_used(self, organization_id: str) -> None:
         """
@@ -420,17 +445,25 @@ class OrganizationManager:
         Args:
             organization_id: Organization UUID
         """
-        query = """
-        UPDATE organization_subscriptions
-        SET seats_used = (
-            SELECT COUNT(*) 
-            FROM organization_members 
-            WHERE organization_id = %s AND status = 'active'
-        )
-        WHERE organization_id = %s
-        """
-        
-        self.db.execute_query(query, (organization_id, organization_id))
+        try:
+            supabase = getattr(self.db, 'client', getattr(self.db, 'supabase', None))
+            if not supabase:
+                return
+                
+            # Count active members
+            count_res = supabase.table("organization_members").select(
+                "id", count="exact"
+            ).eq("organization_id", organization_id).eq("status", "active").execute()
+            
+            seats_used = count_res.count or 0
+            
+            # Update subscription
+            supabase.table("organization_subscriptions").update(
+                {"seats_used": seats_used}
+            ).eq("organization_id", organization_id).execute()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to update seats used: {e}")
     
     def get_organization_usage_summary(
         self,
@@ -452,17 +485,42 @@ class OrganizationManager:
         # Get subscription to determine billing period
         subscription = self.get_organization_subscription(organization_id)
         
+        # Allow trials to see their usage too
+        supabase = getattr(self.db, 'client', getattr(self.db, 'supabase', None))
+        if not supabase:
+            raise Exception("Supabase client not found on db manager")
+            
         if not subscription:
-            return {'total_documents': 0, 'documents_by_user': []}
-        
-        if not period_start:
-            period_start = subscription['current_period_start']
-        if not period_end:
-            period_end = subscription['current_period_end']
+            # Fallback for trial organizations
+            org_res = supabase.table("organizations").select("*").eq("id", organization_id).execute()
+            if not org_res.data:
+                return {'total_documents': 0, 'documents_by_user': []}
+                
+            org = org_res.data[0]
+            from datetime import timedelta
+            
+            if not period_start:
+                try:
+                    period_start = datetime.fromisoformat(org.get('created_at', str(datetime.now())).replace('Z', '+00:00'))
+                except Exception:
+                    period_start = datetime.now()
+            if not period_end:
+                period_end = period_start + timedelta(days=14)
+            tier_display = org.get('subscription_tier', 'trial')
+        else:
+            if not period_start:
+                try:
+                    period_start = datetime.fromisoformat(subscription['current_period_start'].replace('Z', '+00:00'))
+                except:
+                    period_start = subscription['current_period_start']
+            if not period_end:
+                try:
+                    period_end = datetime.fromisoformat(subscription['current_period_end'].replace('Z', '+00:00'))
+                except:
+                    period_end = subscription['current_period_end']
+            tier_display = subscription['subscription_tier']
         
         try:
-            supabase = self.db.supabase
-
             # Query 1: total document count for the org in the period
             total_result = (
                 supabase.table("document_usage")
@@ -494,13 +552,21 @@ class OrganizationManager:
             members = self.db.get_organization_members(organization_id)
             member_map = {m["user_id"]: m for m in (members or [])}
 
+            # Fetch emails via Admin API for the top contributors
+            top_uids = [uid for uid, _ in sorted(user_counts.items(), key=lambda x: -x[1])[:5]]
+            user_meta = self.db.get_users_metadata(top_uids) if top_uids else {}
+
             documents_by_user = []
             for uid, count in sorted(user_counts.items(), key=lambda x: -x[1]):
                 member = member_map.get(uid, {})
+                meta = user_meta.get(uid, {})
+                
+                email = meta.get("email") or member.get("email", uid)
+                full_name = meta.get("full_name") or member.get("full_name") or member.get("name", "")
+                
                 documents_by_user.append({
-                    "email": member.get("email", uid),
-                    "full_name": (member.get("full_name")
-                                  or member.get("name", "")),
+                    "email": email,
+                    "full_name": full_name,
                     "documents_created": count,
                 })
 
@@ -517,7 +583,7 @@ class OrganizationManager:
             'documents_by_user': documents_by_user,
             'period_start': period_start,
             'period_end': period_end,
-            'subscription_tier': subscription['subscription_tier']
+            'subscription_tier': tier_display
         }
     
     def can_create_document(self, user_id: str) -> Tuple[bool, str]:
@@ -647,20 +713,29 @@ class OrganizationManager:
 
             subscription = self.get_organization_subscription(org['id'])
 
-            if not subscription:
-                # Trial user: no paid subscription — skip usage recording silently
-                _logger.info(
-                    f"record_document_creation: no subscription for org {org['id']} "
-                    f"(trial user {user_id}) — skipping usage record"
-                )
-                return True
+            if subscription:
+                try:
+                    from datetime import datetime
+                    start = datetime.fromisoformat(subscription['current_period_start'].replace('Z', '+00:00'))
+                    end = datetime.fromisoformat(subscription['current_period_end'].replace('Z', '+00:00'))
+                except:
+                    start = subscription['current_period_start']
+                    end = subscription['current_period_end']
+            else:
+                # Trial user without subscription
+                from datetime import datetime, timedelta
+                try:
+                    start = datetime.fromisoformat(org.get('created_at', str(datetime.now())).replace('Z', '+00:00'))
+                except:
+                    start = datetime.now()
+                end = start + timedelta(days=14)
 
             result = self.db.record_document_usage(
                 user_id=user_id,
                 organization_id=org['id'],
                 document_type=document_type,
-                billing_period_start=subscription['current_period_start'],
-                billing_period_end=subscription['current_period_end']
+                billing_period_start=start,
+                billing_period_end=end
             )
             return bool(result)
 

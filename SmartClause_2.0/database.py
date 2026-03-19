@@ -1914,6 +1914,36 @@ class DatabaseManager:
     # UTILITY METHODS
     # =========================================================================
     
+    def get_users_metadata(self, user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Fetch emails and names for given user IDs using Admin API."""
+        try:
+            import os
+            from supabase import create_client
+            url = os.getenv("SUPABASE_URL", "").strip()
+            key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+            if not url or not key:
+                return {}
+            
+            if not url.startswith("http"):
+                url = f"https://{url}"
+                
+            admin_client = create_client(url, key)
+            users_map = {}
+            for uid in user_ids:
+                try:
+                    res = admin_client.auth.admin.get_user_by_id(uid)
+                    if res and res.user:
+                        users_map[uid] = {
+                            "email": res.user.email,
+                            "full_name": res.user.user_metadata.get("full_name", "") if res.user.user_metadata else ""
+                        }
+                except Exception:
+                    continue
+            return users_map
+        except Exception as e:
+            logger.error(f"Error fetching users metadata: {e}")
+            return {}
+    
     def cleanup_expired_exports(self):
         """Delete expired exports (run as scheduled job)."""
         try:

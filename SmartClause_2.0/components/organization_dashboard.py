@@ -408,6 +408,10 @@ def render_team_members(
         current_user_email = st.session_state.get("user_email", "")
         current_user_name = st.session_state.get("user_name", "") or (current_user_email.split("@")[0] if current_user_email else "")
 
+        # Fetch accurate metadata for all team members via Admin API
+        uids_to_fetch = [m.get("user_id") for m in members if m.get("user_id")]
+        users_meta = db.get_users_metadata(uids_to_fetch) if uids_to_fetch else {}
+
         for member in members:
             user_data = member.get("users") or {}
             uid = member.get("user_id", "")
@@ -417,15 +421,17 @@ def render_team_members(
             is_self = uid == current_user_id
             is_owner = role == "owner"
 
-            # Resolve display info — members joined from auth.users won't have data
-            # so we gracefully fall back using session state for the current user
+            # Resolve display info from `users_meta`
+            meta = users_meta.get(uid, {})
+            
             if is_self and current_user_email:
                 email = current_user_email
                 name = current_user_name or current_user_email.split("@")[0]
             else:
-                email = user_data.get("email") or member.get("email") or ""
+                email = meta.get("email") or user_data.get("email") or member.get("email") or ""
                 raw_meta = user_data.get("raw_user_meta_data") or {}
-                name = raw_meta.get("full_name") or raw_meta.get("name") or ""
+                name = meta.get("full_name") or raw_meta.get("full_name") or raw_meta.get("name") or ""
+                
                 if not email and not name:
                     # Last resort: show a shortened user ID
                     email = f"user:{uid[:8]}…" if uid else "Unknown"

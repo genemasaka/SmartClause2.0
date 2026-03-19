@@ -1238,7 +1238,7 @@ def _render_chat_panel(
     """, unsafe_allow_html=True)
     
     # Messages display
-    with st.container(height=500, border=False):
+    with st.container(height=360, border=False):
         messages_html = '<div class="chat-history">'
         
         if len(st.session_state.chat_messages) == 0:
@@ -1300,16 +1300,17 @@ def _render_chat_panel(
         label_visibility="collapsed"
     )
     
-    col_send_clear = st.columns(1)[0]
-    with col_send_clear:
+    # Put Send and Clear on the same row to save vertical space
+    col_send, col_clear = st.columns([3, 1])
+    with col_send:
         send_button = st.button(
             "Send",
             use_container_width=True,
             type="primary",
             disabled=st.session_state.chat_is_streaming or not user_input.strip()
         )
-        
-        if st.button("Clear", use_container_width=True):
+    with col_clear:
+        if st.button("Clear", use_container_width=True, help="Clear chat history"):
             st.session_state.chat_messages = []
             st.session_state.chat_session_id = str(uuid.uuid4())
             st.rerun()
@@ -1850,7 +1851,7 @@ def render_document_editor():
         # Render versions panel if needed
         if col_versions and st.session_state.show_versions_panel:
             with col_versions:
-                _render_versions_panel(db, document_id, matter_id)
+                _render_versions_panel(db, document_id, st.session_state.current_version_id)
         
         # Render main editor
         with col_editor:
@@ -1870,13 +1871,6 @@ def render_document_editor():
                  </div>
                  """, unsafe_allow_html=True)
                  
-
-
-        if st.session_state.show_versions_panel:
-            with col_versions:
-                _render_versions_panel(db, document_id, st.session_state.current_version_id)
-                st.markdown("</div>", unsafe_allow_html=True)
-        
         # Render chat panel if needed
         if col_chat and st.session_state.get("show_chat_panel", False):
             with col_chat:

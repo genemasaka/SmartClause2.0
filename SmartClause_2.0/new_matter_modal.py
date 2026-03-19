@@ -693,15 +693,11 @@ def render_new_matter_modal():
     if not st.session_state.get("show_new_matter", False):
         return
     
-    # Check if we're in "wait for generation" mode
+    # If we just triggered generation, modal is already closed — do not re-open it.
+    # (show_new_matter is cleared in the create handler before rerun)
     if st.session_state.get("wait_for_generation_start", False):
-        # Show loading state while waiting for generation to confirm
-        @st.dialog("Creating Document...", width="large")
-        def wait_dialog():
-            st.info("🔄 Setting up your document generation...")
-            st.markdown("Please wait while we prepare your document...")
-        
-        wait_dialog()
+        # Clear stale flag and bail — editor is already rendering generation
+        st.session_state.wait_for_generation_start = False
         return
     
     # Determine mode: new_matter or new_document (adding to existing matter)
@@ -947,13 +943,50 @@ def render_new_matter_modal():
                             print(f"⚠️ Document usage tracking error: {usage_error}")
                             # Don't block document creation if usage tracking fails
                         
-                        # CRITICAL FIX: Set state to wait for generation confirmation
+                        # Set up generation state for the NEW document
                         st.session_state.current_matter_id = matter_id
                         st.session_state.current_document_id = document["id"]
                         st.session_state.new_matter_payload = payload
-                        st.session_state.wait_for_generation_start = True
                         st.session_state.generation_complete = False
                         
+                        # IMPORTANT: Close modal BEFORE redirecting so it does not
+                        # re-open and block the editor's streaming generation UI.
+                        st.session_state.show_new_matter = False
+                        st.session_state.modal_mode = "new_matter"
+                        st.session_state.existing_matter_id = None
+                        st.session_state.wait_for_generation_start = False
+                        
+                        # CRITICAL: Clear ALL stale editor state from any previous
+                        # editing session so the generation phase runs fresh for the
+                        # new document. Without this, leftover `generation_complete`,
+                        # `current_version_id`, and `editor_data_loaded_*` cache keys
+                        # cause the editor to skip generation and show old content.
+                        stale_keys = [
+                            "current_version_id",
+                            "editor_content",
+                            "editor_original_content",
+                            "last_component_content",
+                            "editor_comments",
+                            "editor_initialized",
+                            "autosave_in_progress",
+                            "unsaved_changes",
+                            "last_autosave",
+                            "chat_session_id",
+                            "chat_messages",
+                            "chat_is_streaming",
+                            "show_versions_panel",
+                            "pending_autosave_content",
+                        ]
+                        for key in stale_keys:
+                            st.session_state.pop(key, None)
+                        
+                        # Also clear any editor_data_loaded_* cache keys from prior docs
+                        cache_keys_to_remove = [
+                            k for k in list(st.session_state.keys())
+                            if k.startswith("editor_data_loaded_")
+                        ]
+                        for k in cache_keys_to_remove:
+                            st.session_state.pop(k, None)
 
                         # Navigate to editor
                         from auth import update_query_params
