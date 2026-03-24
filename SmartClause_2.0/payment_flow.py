@@ -179,109 +179,59 @@ class PaymentFlowManager:
             attempts = 0
             while attempts < max_attempts:
                 try:
+                    # ── PRIORITY 1: Check Callback Table ───────────────────
+                    # Authoritative result from Safaricom via Edge Function
+                    callback = self.db.get_mpesa_callback(checkout_request_id)
+                    
+                    if callback:
+                        status = callback.get("status")
+                        result_code = str(callback.get("result_code", ""))
+                        
+                        if status == "success" or result_code == "0":
+                            receipt_number = callback.get("mpesa_receipt_number", "")
+                            
+                            # Update transaction status in our main table
+                            self.db.update_payment_status(
+                                checkout_request_id=checkout_request_id,
+                                status="completed",
+                                receipt_number=receipt_number
+                            )
+                            
+                            logger.info(f"Payment verified via callback for {checkout_request_id}")
+                            return self._finalize_payment(transaction, user_id, receipt_number)
+                            
+                        elif status == "failed" or result_code in ["1032", "1037", "1"]:
+                            self.db.update_payment_status(
+                                checkout_request_id=checkout_request_id,
+                                status="failed"
+                            )
+                            logger.warning(f"Payment failed via callback for {checkout_request_id}")
+                            return {
+                                "success": False,
+                                "message": "Payment was cancelled or failed. Please try again."
+                            }
+
+                    # ── PRIORITY 2: Fallback to Query API ──────────────────
+                    # Direct check with Safaricom if callback is delayed
                     response = self.mpesa.query_stk_push(checkout_request_id)
                     result_code = str(response.get("ResultCode", ""))
                     
                     if result_code == "0":
-                        # Payment successful
                         receipt_number = response.get("MpesaReceiptNumber", "")
-                        
-                        # Update transaction status
                         self.db.update_payment_status(
                             checkout_request_id=checkout_request_id,
                             status="completed",
                             receipt_number=receipt_number
                         )
-                        
-                        # Process payment — supporting both 'subscription' (standard) and legacy types if needed
-                        transaction_type = transaction.get("transaction_type")
-
-                        if transaction_type in ["subscription", "organization_subscription"]:
-                            metadata = transaction.get("metadata") or {}
-                            organization_id = metadata.get("organization_id")
-                            seats = int(metadata.get("seats", 1))
-                            tier = metadata.get("tier", "individual")
-
-                            if not organization_id:
-                                logger.error(
-                                    f"organization_subscription missing organization_id "
-                                    f"in metadata for tx {checkout_request_id}"
-                                )
-                                return {
-                                    "success": False,
-                                    "message": "Payment recorded but subscription activation failed. "
-                                               "Please contact support."
-                                }
-
-                            # Activate subscription via SubscriptionManager
-                            upgraded = self.subscription_mgr.upgrade_to_tier(
-                                user_id=user_id,
-                                new_tier=tier,
-                                seats=seats
-                            )
-
-                            if upgraded:
-                                logger.info(
-                                    f"Activated {tier} subscription for org "
-                                    f"{organization_id} ({seats} seats)"
-                                )
-                                return {
-                                    "success": True,
-                                    "message": f"Payment successful! {tier.title()} plan is now active.",
-                                    "tier": tier
-                                }
-                            else:
-                                logger.error(
-                                    f"upgrade_to_tier failed for org {organization_id} "
-                                    f"after successful payment {checkout_request_id}"
-                                )
-                                return {
-                                    "success": False,
-                                    "message": "Payment received but subscription activation failed. "
-                                               "Please contact support with receipt number: "
-                                               f"{receipt_number}"
-                                }
-
-                        elif transaction_type == "credit_purchase":
-                            credits = transaction.get("credits_purchased") or 0
-                            
-                            # Update user's credit balance
-                            updated_sub = self.db.update_subscription_credits(user_id, credits)
-                            
-                            if updated_sub:
-                                logger.info(f"Added {credits} credits for user {user_id}")
-                                return {
-                                    "success": True,
-                                    "credits_added": credits,
-                                    "message": f"Payment successful! {credits} credits have been added to your account."
-                                }
-                            else:
-                                logger.error(f"Failed to update credits for user {user_id} after payment {checkout_request_id}")
-                                return {
-                                    "success": False,
-                                    "message": "Payment received but credits update failed. Please contact support."
-                                }
-
-                        else:
-                            # Unknown transaction type — log and return a safe error
-                            logger.error(
-                                f"Unknown transaction_type '{transaction_type}' for "
-                                f"checkout {checkout_request_id}"
-                            )
-                            return {
-                                "success": False,
-                                "message": "Unrecognized payment type. Please contact support."
-                            }
+                        logger.info(f"Payment verified via Query API for {checkout_request_id}")
+                        return self._finalize_payment(transaction, user_id, receipt_number)
                     
                     elif result_code in ["1032", "1037", "1"]:
-                        # Payment failed or cancelled
                         self.db.update_payment_status(
                             checkout_request_id=checkout_request_id,
                             status="failed"
                         )
-                        
-                        logger.warning(f"Payment failed for user {user_id}, result code: {result_code}")
-                        
+                        logger.warning(f"Payment failed via Query API for {checkout_request_id}")
                         return {
                             "success": False,
                             "message": "Payment was cancelled or failed. Please try again."
@@ -308,6 +258,81 @@ class PaymentFlowManager:
             return {
                 "success": False,
                 "message": "An error occurred during verification. Please try again."
+            }
+
+    def _finalize_payment(self, transaction: Dict[str, Any], user_id: str, receipt_number: str) -> Dict[str, Any]:
+        """
+        Finalize a successful payment by updating subscriptions or credits.
+        """
+        try:
+            transaction_type = transaction.get("transaction_type")
+            checkout_request_id = transaction.get("checkout_request_id")
+
+            if transaction_type in ["subscription", "organization_subscription"]:
+                metadata = transaction.get("metadata") or {}
+                organization_id = metadata.get("organization_id")
+                seats = int(metadata.get("seats", 1))
+                tier = metadata.get("tier", "individual")
+
+                if not organization_id:
+                    logger.error(f"organization_subscription missing organization_id in metadata for tx {checkout_request_id}")
+                    return {
+                        "success": False,
+                        "message": "Payment recorded but subscription activation failed. Please contact support."
+                    }
+
+                # Activate subscription via SubscriptionManager
+                upgraded = self.subscription_mgr.upgrade_to_tier(
+                    user_id=user_id,
+                    new_tier=tier,
+                    seats=seats
+                )
+
+                if upgraded:
+                    logger.info(f"Activated {tier} subscription for org {organization_id} ({seats} seats)")
+                    return {
+                        "success": True,
+                        "message": f"Payment successful! {tier.title()} plan is now active.",
+                        "tier": tier
+                    }
+                else:
+                    logger.error(f"upgrade_to_tier failed for org {organization_id} after successful payment {checkout_request_id}")
+                    return {
+                        "success": False,
+                        "message": f"Payment received but subscription activation failed. Please contact support with receipt number: {receipt_number}"
+                    }
+
+            elif transaction_type == "credit_purchase":
+                credits = transaction.get("credits_purchased") or 0
+                
+                # Update user's credit balance
+                updated_sub = self.db.update_subscription_credits(user_id, credits)
+                
+                if updated_sub:
+                    logger.info(f"Added {credits} credits for user {user_id}")
+                    return {
+                        "success": True,
+                        "credits_added": credits,
+                        "message": f"Payment successful! {credits} credits have been added to your account."
+                    }
+                else:
+                    logger.error(f"Failed to update credits for user {user_id} after payment {checkout_request_id}")
+                    return {
+                        "success": False,
+                        "message": "Payment received but credits update failed. Please contact support."
+                    }
+
+            else:
+                logger.error(f"Unknown transaction_type '{transaction_type}' for checkout {checkout_request_id}")
+                return {
+                    "success": False,
+                    "message": "Unrecognized payment type. Please contact support."
+                }
+        except Exception as e:
+            logger.error(f"Error finalizing payment: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": "Payment verified but finalization failed. Please contact support."
             }
     
     def get_pending_payment(self, user_id: str) -> Optional[Dict[str, Any]]:

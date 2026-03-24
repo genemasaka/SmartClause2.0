@@ -1565,6 +1565,25 @@ class DatabaseManager:
             logger.error(f"Error fetching transaction by checkout ID: {e}")
             return None
 
+    def get_mpesa_callback(self, checkout_request_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Query the mpesa_payments table for a callback result from Supabase Edge Function.
+        This represents the authoritative result sent by Safaricom.
+        """
+        try:
+            result = self.client.table("mpesa_payments")\
+                .select("*")\
+                .eq("checkout_request_id", checkout_request_id)\
+                .execute()
+            
+            if result.data and len(result.data) > 0:
+                return result.data[0]
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching M-Pesa callback from mpesa_payments: {e}")
+            return None
+
     def update_subscription_end_date(self, user_id: str, end_date: str) -> bool:
         """Update subscription end date (for renewals)."""
         try:
