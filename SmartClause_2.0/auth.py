@@ -3,11 +3,15 @@ import streamlit as st
 from error_helpers import show_error
 from supabase import create_client
 import os
+import logging
 from dotenv import load_dotenv
-import time
+
 import hashlib
 import hmac
 from analytics import Analytics
+from email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -42,6 +46,17 @@ def get_supabase_client():
              raise ValueError(f"Invalid SUPABASE_URL: '{supabase_url}'. It looks like a placeholder.")
 
     return create_client(supabase_url, supabase_key)
+
+
+def get_supabase_admin_client():
+    """Get Supabase client with SERVICE_ROLE key for admin tasks."""
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+    
+    if not supabase_url or not supabase_service_key:
+        raise ValueError("SUPABASE_URL or SUPABASE_SERVICE_KEY is missing from .env file")
+        
+    return create_client(supabase_url, supabase_service_key)
 
 
 def create_session_cookie(user_id: str, email: str, access_token: str, refresh_token: str):
@@ -130,6 +145,12 @@ def save_session(user_id: str, email: str, access_token: str, refresh_token: str
     
     # Add session to query params for persistence across navigation
     st.query_params["session"] = cookie
+    
+    # Preserving invite_token if it exists
+    if "invite_token" in st.query_params:
+        st.query_params["invite_token"] = st.query_params["invite_token"]
+    elif "preserved_invite_token" in st.session_state:
+        st.query_params["invite_token"] = st.session_state["preserved_invite_token"]
 
 
 def restore_session_from_cookie() -> bool:
@@ -225,131 +246,57 @@ def login_page():
     if "auth_view" not in st.session_state:
         st.session_state["auth_view"] = "login"
 
-    # ── Supabase recovery-link handler ───────────────────────────────────────
-    # Supabase emails put the session in the URL hash (#access_token=...&type=recovery).
-    # Python (server-side) cannot read hash fragments.
-    #
-    # Two-phase approach:
-    #   Phase 1: Supabase redirects here with ?type=recovery  (Python CAN see this)
-    #            → show a bridge page whose JS reads the hash and submits a form
-    #              with a user click (user-activation satisfies sandbox policy).
-    #   Phase 2: Form posts to /?sc_type=recovery&sc_token=TOKEN (Python CAN see this)
-    #            → show the real "Set New Password" form.
-    #
-    # Phase 2 detection (arrived via the bridge form submit):
-    if st.query_params.get("sc_type") == "recovery" and st.query_params.get("sc_token"):
+    # ── Recovery token handler (pure Python, no JS bridge needed) ────────────
+    # The reset email contains ?sc_token=<token_hash>&sc_type=recovery
+    # We verify the token_hash directly against Supabase's /auth/v1/verify endpoint
+    # to get a real access_token + refresh_token, then store them for the reset form.
+    sc_type  = st.query_params.get("sc_type", "")
+    sc_token = st.query_params.get("sc_token", "")
+
+    if sc_type == "recovery" and sc_token:
+        if "reset_access_token" not in st.session_state:
+            try:
+                import httpx
+                supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+                supabase_anon_key = (os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+                verify_resp = httpx.post(
+                    f"{supabase_url}/auth/v1/verify",
+                    headers={
+                        "apikey": supabase_anon_key,
+                        "Content-Type": "application/json"
+                    },
+                    json={"token_hash": sc_token, "type": "recovery"},
+                    timeout=10
+                )
+                verify_data = verify_resp.json()
+                access_token  = verify_data.get("access_token")
+                refresh_token = verify_data.get("refresh_token")
+                if access_token:
+                    st.session_state["reset_access_token"]  = access_token
+                    st.session_state["reset_refresh_token"] = refresh_token or ""
+                else:
+                    error_msg = verify_data.get("error_description") or verify_data.get("msg") or "Invalid or expired reset link."
+                    st.session_state["reset_token_error"] = error_msg
+            except Exception as e:
+                logger.error(f"Token verify error: {e}", exc_info=True)
+                st.session_state["reset_token_error"] = "Could not verify reset link. Please request a new one."
         st.session_state["auth_view"] = "reset_password"
-        st.session_state["reset_access_token"] = st.query_params["sc_token"]
 
-    # Phase 1 detection (landed directly from Supabase email link):
-    elif st.query_params.get("type") == "recovery" and st.session_state["auth_view"] != "reset_password":
-        # Render ONLY the bridge — skip all other UI for this run.
-        # First hide all Streamlit chrome so the bridge fills the screen.
-        st.markdown("""
-        <style>
-        #MainMenu, header, footer, [data-testid="stToolbar"],
-        [data-testid="stSidebar"], [data-testid="collapsedControl"],
-        [data-testid="stDecoration"] { display: none !important; }
-        .stApp, .main, .block-container, [data-testid="stAppViewContainer"] {
-            background: #000 !important;
-            padding: 0 !important; margin: 0 !important;
-            max-width: 100% !important; width: 100vw !important;
-        }
-        iframe { border: none !important; }
-        </style>
-        """, unsafe_allow_html=True)
-
-        import streamlit.components.v1 as components
-        components.html(f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-          * {{ box-sizing: border-box; margin:0; padding:0; }}
-          html, body {{
-            width:100%; height:100%;
-            background:#000;
-            display:flex; align-items:center; justify-content:center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          }}
-          .card {{
-            background:#111; border:1px solid #1f1f1f; border-radius:16px;
-            padding:48px 40px; text-align:center; max-width:420px; width:90%;
-            box-shadow: 0 20px 60px rgba(0,0,0,.6);
-          }}
-          .logo {{ font-size:28px; margin-bottom:16px; }}
-          h2 {{ color:#fff; margin:0 0 10px; font-size:22px; font-weight:700; }}
-          p  {{ color:#9CA3AF; margin:0 0 28px; font-size:14px; line-height:1.6; }}
-          button {{
-            background: linear-gradient(135deg,#4B9EFF 0%,#3B7DD1 100%);
-            color:#fff; border:none; border-radius:8px;
-            padding:14px 0; font-size:15px; font-weight:600;
-            cursor:pointer; width:100%; transition: opacity .2s;
-          }}
-          button:hover:not(:disabled) {{ opacity:.88; }}
-          button:disabled {{ opacity:.45; cursor:default; }}
-          .err {{ color:#f87171; margin-top:16px; font-size:13px; display:none; line-height:1.5; }}
-        </style>
-        </head>
-        <body>
-        <div class="card">
-          <div class="logo">🔐</div>
-          <h2>Reset Your Password</h2>
-          <p>Your reset link was verified.<br>Click below to set a new password.</p>
-          <form id="rf" method="GET" target="_top" action="http://localhost:8501/">
-            <input type="hidden" name="sc_type" value="recovery">
-            <input type="hidden" name="sc_token" id="tk" value="">
-            <button type="submit" id="btn" disabled>Loading…</button>
-          </form>
-          <div class="err" id="err">
-            Could not read the reset token from the URL.<br>
-            Please request a new password reset link.
-          </div>
-        </div>
-        <script>
-        (function() {{
-          try {{
-            // Read hash from parent page (allowed - same origin + allow-same-origin sandbox)
-            var hash = '';
-            try {{ hash = window.parent.location.hash; }} catch(e) {{}}
-            if (!hash) hash = window.location.hash;
-
-            var params = {{}};
-            (hash || '').replace(/^#/, '').split('&').forEach(function(pair) {{
-              var idx = pair.indexOf('=');
-              if (idx > -1) {{
-                try {{
-                  params[decodeURIComponent(pair.slice(0, idx))] =
-                    decodeURIComponent(pair.slice(idx + 1));
-                }} catch(e) {{}}
-              }}
-            }});
-
-            var token = params['access_token'];
-            if (token) {{
-              // Update form action to the app's real base URL
-              try {{
-                var appBase = window.parent.location.origin + '/';
-                document.getElementById('rf').action = appBase;
-              }} catch(e) {{}}
-              document.getElementById('tk').value = token;
-              var btn = document.getElementById('btn');
-              btn.disabled = false;
-              btn.textContent = 'Continue to Reset Password →';
-            }} else {{
-              document.getElementById('btn').style.display = 'none';
-              document.getElementById('err').style.display = 'block';
-            }}
-          }} catch(e) {{
-            document.getElementById('btn').style.display = 'none';
-            document.getElementById('err').style.display = 'block';
-          }}
-        }})();
-        </script>
-        </body>
-        </html>
-        """, height=600, scrolling=False)
-        st.stop()   # Don't render anything else while bridge is shown
+    elif sc_type == "signup" and sc_token:
+        try:
+            import httpx
+            supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+            supabase_anon_key = (os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
+            httpx.post(
+                f"{supabase_url}/auth/v1/verify",
+                headers={"apikey": supabase_anon_key, "Content-Type": "application/json"},
+                json={"token_hash": sc_token, "type": "email"},
+                timeout=10
+            )
+            st.success("✅ Email confirmed! You can now sign in.")
+        except Exception:
+            pass
+        st.session_state["auth_view"] = "login"
 
     
     # Add custom CSS for the modern split-screen layout
@@ -1027,16 +974,132 @@ def login_page():
                 if send_btn:
                     if reset_email:
                         try:
-                            supabase = get_supabase_client()
-                            supabase.auth.reset_password_for_email(reset_email)
-                            Analytics().track_event("password_reset_requested", {"email": reset_email})
-                            st.success("✅ Reset link sent if email exists.")
+                            admin_client = get_supabase_admin_client()
+                            app_url = os.getenv("APP_URL", "https://smartclause.net").rstrip("/")
+
+                            res = admin_client.auth.admin.generate_link({
+                                "type": "recovery",
+                                "email": reset_email,
+                                "options": {
+                                    "redirect_to": f"{app_url}/"
+                                }
+                            })
+
+                            # ── Extract the access token from the action_link ──────────
+                            # generate_link returns a Supabase magic link whose hash contains
+                            # access_token. We parse it server-side (Python has full access)
+                            # and build a clean query-param URL to email the user directly.
+                            # This avoids ALL JS bridge / iframe / hash complexity entirely.
+                            action_link = None
+                            if res:
+                                if hasattr(res, 'properties') and res.properties:
+                                    props = res.properties
+                                    action_link = (
+                                        getattr(props, 'action_link', None)
+                                        or (props.get('action_link') if isinstance(props, dict) else None)
+                                    )
+                                if not action_link:
+                                    action_link = getattr(res, 'action_link', None) or getattr(res, 'link', None)
+
+                            if action_link:
+                                # Parse the token out of the action_link (it's in the hash or as a param)
+                                from urllib.parse import urlparse, parse_qs, urlencode
+                                parsed = urlparse(action_link)
+
+                                # Supabase puts token_hash + type as query params in generate_link responses
+                                qs = parse_qs(parsed.query)
+                                token_hash = (qs.get('token_hash') or qs.get('token') or [None])[0]
+                                link_type  = (qs.get('type') or ['recovery'])[0]
+
+                                if token_hash:
+                                    # Build a direct, clean URL the user can click:
+                                    # ?sc_token=<hash>&sc_type=recovery
+                                    # Python reads these immediately — no JS needed.
+                                    direct_params = urlencode({"sc_token": token_hash, "sc_type": link_type})
+                                    direct_reset_url = f"{app_url}/?{direct_params}"
+                                else:
+                                    # Fallback: send the raw action_link if we can't extract the token
+                                    direct_reset_url = action_link
+
+                                email_service = EmailService()
+                                email_service.send_password_reset(reset_email, direct_reset_url)
+                                Analytics().track_event("password_reset_requested", {"email": reset_email})
+                                st.success("✅ Reset link sent if email exists.")
+                            else:
+                                logger.error(f"Failed to generate reset link for {reset_email}: {res}")
+                                st.error("Failed to generate reset link. Please contact support.")
+
                         except Exception as e:
+                            logger.error(f"Error in password reset: {e}", exc_info=True)
                             Analytics().track_error(e, "password reset")
                             show_error(e, "password reset")
             
             if st.button("← Back to login", key="back_to_login_from_forgot", use_container_width=True):
                 st.session_state["auth_view"] = "login"
+                st.rerun()
+
+        elif st.session_state["auth_view"] == "reset_password":
+            st.markdown("""
+            <div class="auth-title">New Password</div>
+            <div class="auth-subtitle">Set a secure password for your account.</div>
+            """, unsafe_allow_html=True)
+
+            # Show error immediately if token verification failed on load
+            if st.session_state.get("reset_token_error"):
+                st.error(st.session_state["reset_token_error"])
+                if st.button("← Request a new reset link", key="back_from_token_error", use_container_width=True):
+                    st.session_state.pop("reset_token_error", None)
+                    st.session_state.pop("reset_access_token", None)
+                    st.session_state["auth_view"] = "forgot_password"
+                    # Clear recovery params so the handler doesn't re-trigger on rerun
+                    st.query_params.clear()
+                    st.rerun()
+            else:
+                with st.form("reset_password_form", clear_on_submit=False):
+                    new_password = st.text_input("New Password", type="password", key="new_password")
+                    confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+                    submit = st.form_submit_button("Update Password", type="primary", use_container_width=True)
+                    
+                    if submit:
+                        if not new_password or not confirm_password:
+                            st.error("Please fill in both fields")
+                        elif new_password != confirm_password:
+                            st.error("Passwords do not match")
+                        elif len(new_password) < 8:
+                            st.error("Password must be at least 8 characters")
+                        else:
+                            try:
+                                access_token  = st.session_state.get("reset_access_token")
+                                refresh_token = st.session_state.get("reset_refresh_token", "")
+                                if not access_token:
+                                    st.error("Reset session expired. Please request a new link.")
+                                else:
+                                    supabase = get_supabase_client()
+                                    # access_token is a real JWT from /auth/v1/verify
+                                    supabase.auth.set_session(access_token, refresh_token)
+                                    supabase.auth.update_user({"password": new_password})
+
+                                    st.success("✅ Password updated! Returning to login...")
+                                    Analytics().track_event("password_reset_success")
+
+                                    import time as _time
+                                    _time.sleep(2)
+                                    st.session_state["auth_view"] = "login"
+                                    st.session_state.pop("reset_access_token", None)
+                                    st.session_state.pop("reset_refresh_token", None)
+                                    st.session_state.pop("reset_token_error", None)
+                                    st.rerun()
+                            except Exception as e:
+                                logger.error(f"Error resetting password: {e}", exc_info=True)
+                                show_error(e, "reset password")
+
+            if st.button("← Back to login", key="back_to_login_from_reset", use_container_width=True):
+                st.session_state["auth_view"] = "login"
+                st.session_state.pop("reset_token_error", None)
+                st.session_state.pop("reset_access_token", None)
+                st.session_state.pop("reset_refresh_token", None)
+                # Clear recovery params so the handler doesn't re-trigger on rerun
+                st.query_params.clear()
                 st.rerun()
 
         elif st.session_state["auth_view"] == "signup":
@@ -1046,11 +1109,53 @@ def login_page():
             """, unsafe_allow_html=True)
             
             with st.form("signup_form", clear_on_submit=False):
-                email_signup = st.text_input("Your email", key="signup_email")
-                password_signup = st.text_input("Password", type="password", key="signup_password")
+                email = st.text_input("Work Email *", key="email_signup", placeholder="you@company.com")
+                password = st.text_input("Password *", type="password", key="password_signup", help="Must be at least 8 characters.")
                 submit = st.form_submit_button("Get Started", type="primary", use_container_width=True)
+                
                 if submit:
-                    st.info("Signup logic would go here.")
+                    if not email or not password:
+                        st.error("Please enter both email and password")
+                    elif len(password) < 8:
+                        st.error("Password must be at least 8 characters")
+                    else:
+                        try:
+                            supabase = get_supabase_client()
+                            # Sign up with Supabase
+                            response = supabase.auth.sign_up({
+                                "email": email,
+                                "password": password
+                            })
+                            
+                            if response.user:
+                                st.success("✅ Account created! Please check your email for confirmation.")
+                                
+                                # Send custom confirmation email via Hostinger
+                                try:
+                                    email_service = EmailService()
+                                    email_service.send_confirmation(email)
+                                except Exception as e:
+                                    logger.error(f"Failed to send confirmation email: {e}")
+                                
+                                Analytics().track_event("user_signup_success", {"email": email})
+                                
+                                # If there's an invite token, we might want to handle it here or in the confirmation link
+                                # For now, just show success
+                            else:
+                                st.error("Signup failed. Please try again.")
+                                
+                        except Exception as e:
+                            Analytics().track_event("user_signup_failure", {"email": email, "error": str(e)})
+                            if "confirmation email" in str(e).lower():
+                                st.error("""
+                                    **Unable to send confirmation email via Supabase.**
+                                    
+                                    Please ensure you have **disabled 'Confirm email'** in your Supabase Project Settings (Authentication > Settings). 
+                                    
+                                    *SmartClause is configured to send its own branded welcome email via Hostinger once the user is created.*
+                                """)
+                            else:
+                                show_error(e, "signup")
 
             st.markdown('<div class="auth-toggle">Already have an account?</div>', unsafe_allow_html=True)
             if st.button("Back to login", key="switch_to_login", use_container_width=True):
@@ -1144,7 +1249,18 @@ def check_authentication():
     Check if user is authenticated with true persistence.
     Uses query param-based session cookies that survive navigation.
     """
-    
+
+    # ── PRIORITY: Password-reset / recovery flow ──────────────────────────
+    # If sc_type=recovery + sc_token are present, the user clicked a reset link.
+    # Skip session restore entirely and show the reset form.
+    # login_page() handles the token exchange and form rendering.
+    sc_type  = st.query_params.get("sc_type", "")
+    sc_token = st.query_params.get("sc_token", "")
+
+    if sc_type == "recovery" and sc_token:
+        login_page()
+        st.stop()
+
     # Check if already authenticated in this session
     if st.session_state.get("authenticated"):
         return True
@@ -1195,21 +1311,30 @@ def require_auth(func):
 
 def update_query_params(params: dict):
     """
-    Safely update query parameters while preserving the session cookie.
-    This prevents logout when navigating between pages.
+    Safely update query parameters while preserving critical state like
+    session, invite_token, document_id, and matter_id.
     """
-    # 1. Get current session cookie
+    # 1. Get current state
     cookie = get_session_cookie()
+    current_params = st.query_params.to_dict()
     
-    # 2. Prepare new params
+    # 2. Start with new params
     new_params = params.copy()
     
-    # 3. Inject session cookie if it exists and not already in params
+    # 3. Inject session cookie if not already in new_params
     if cookie and "session" not in new_params:
         new_params["session"] = cookie
         
-    # 4. Update the actual query params
-    # In newer Streamlit, we can just clear and update
+    # 4. Preserve other critical parameters if they exist in current state or session
+    critical_params = ["invite_token", "document_id", "matter_id"]
+    for p in critical_params:
+        if p not in new_params:
+            if p in current_params:
+                new_params[p] = current_params[p]
+            elif f"preserved_{p}" in st.session_state:
+                new_params[p] = st.session_state[f"preserved_{p}"]
+
+    # 5. Update the actual query params
     try:
         st.query_params.clear()
         for k, v in new_params.items():

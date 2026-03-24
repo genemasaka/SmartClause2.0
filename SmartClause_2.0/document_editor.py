@@ -8,13 +8,11 @@ from datetime import datetime
 from document_generator import DocumentGenerator
 from bs4 import BeautifulSoup, Tag, NavigableString
 from docx import Document as DocxDocument
-from docx.shared import Pt, Inches, Cm, RGBColor
+from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 from database import DatabaseManager
-from modal_close_helper import confirm_generation_started, is_waiting_for_generation
 from error_helpers import show_error
+from modal_close_helper import confirm_generation_started
 from auth import update_query_params
 from analytics import Analytics
 # Configure logging
@@ -1748,12 +1746,19 @@ def render_document_editor():
                     st.session_state.unsaved_changes = False
                     st.session_state.editor_comments = []  # No comments yet
                     
+                    # Cleanup: remove generation payload once complete to exit focus mode
+                    st.session_state.pop("new_matter_payload", None)
+                    
                     st.success("Document generated successfully!")
                     
                     # Record document usage for subscription tracking
                     from subscription_manager import SubscriptionManager
                     sub_manager = SubscriptionManager(db)
                     sub_manager.record_document_generation(st.session_state.user_id)
+                    
+                    # Explicitly ensure view is set to editor for the transition
+                    from auth import update_query_params
+                    update_query_params({"view": "editor", "document_id": document_id})
                     
                     time.sleep(1)
                     st.rerun()
@@ -1981,7 +1986,7 @@ def render_document_editor():
                 show_error(e, "document")
         
         with col3:
-            if st.button("Save Major Version", use_container_width=True):
+            if st.button("Save Major Version", use_container_width=True, disabled=not has_edit_access):
                 st.session_state.show_major_version_modal = True
         
         with col4:

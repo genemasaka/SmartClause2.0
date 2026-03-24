@@ -12,6 +12,7 @@ from typing import Optional, Dict, List
 from subscription_manager import SubscriptionManager, PRICING
 from organization_manager import get_user_role_from_org
 from database import DatabaseManager
+from email_service import EmailService
 
 from analytics import Analytics
 logger = logging.getLogger(__name__)
@@ -40,20 +41,11 @@ def _get_admin_supabase_client():
 
 def _send_invite_email(email: str, org_name: str, role: str, invite_token: str) -> bool:
     """
-    Try to send an invite via Supabase's admin invite API.
-    Returns True on success, False if we should fall back to a manual link.
+    Send an invite email via Hostinger SMTP.
     """
-    admin_client = _get_admin_supabase_client()
-    if not admin_client:
-        return False
     try:
-        app_url = os.getenv("APP_URL", "http://localhost:8501").rstrip("/")
-        redirect_url = f"{app_url}/?invite_token={invite_token}"
-        admin_client.auth.admin.invite_user_by_email(
-            email,
-            options={"redirect_to": redirect_url, "data": {"org_invite": invite_token}},
-        )
-        return True
+        email_service = EmailService()
+        return email_service.send_invitation(email, org_name, role, invite_token)
     except Exception as e:
         logger.error(f"Failed to send invite email to {email}: {e}")
         return False
@@ -448,11 +440,25 @@ def render_team_members(
                     unsafe_allow_html=True,
                 )
             with col_role:
-                st.markdown(
-                    f'<div style="padding-top:12px;">'
-                    f'<span class="member-role {role}">{role.upper()}</span></div>',
-                    unsafe_allow_html=True,
-                )
+                if user_role == "owner" and not is_self and not is_owner:
+                    st.markdown('<div style="padding-top:6px;"></div>', unsafe_allow_html=True)
+                    new_role = st.selectbox(
+                        "Role",
+                        options=["member", "admin"],
+                        index=0 if role == "member" else 1,
+                        key=f"role_sel_{uid}",
+                        label_visibility="collapsed"
+                    )
+                    if new_role != role:
+                        db.update_org_member_role(org_id, uid, new_role)
+                        st.success(f"Role updated to {new_role}")
+                        st.rerun()
+                else:
+                    st.markdown(
+                        f'<div style="padding-top:12px;">'
+                        f'<span class="member-role {role}">{role.upper()}</span></div>',
+                        unsafe_allow_html=True,
+                    )
             with col_action:
                 if not is_self and not is_owner and user_role in ["owner", "admin"]:
                     if st.button("✕", key=f"remove_{member.get('user_id')}", help="Remove member"):

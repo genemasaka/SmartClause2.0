@@ -6,7 +6,7 @@ Handles organization creation, member management, and subscription enforcement
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, timedelta
 from enum import Enum
-import re
+
 
 
 class SubscriptionTier(Enum):
@@ -292,9 +292,9 @@ class OrganizationManager:
             if not supabase:
                 return False
                 
-            result = list(supabase.table("organization_members").update(
+            supabase.table("organization_members").update(
                 {"status": "suspended"}
-            ).eq("organization_id", organization_id).eq("user_id", user_id).execute().data)
+            ).eq("organization_id", organization_id).eq("user_id", user_id).execute()
         except Exception as e:
             import logging
             logging.getLogger(__name__).error(f"Failed to remove organization member: {e}")

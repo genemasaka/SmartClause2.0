@@ -18,6 +18,13 @@ COMMENT ON COLUMN organizations.allow_domain_autojoin IS
     'When true, new users whose email domain matches this org are automatically '
     'added as members on sign-up. Must be explicitly enabled by an org admin.';
 
+-- ---------------------------------------------------------------------------
+-- ISSUE 7: Missing timestamp columns
+-- ---------------------------------------------------------------------------
+ALTER TABLE organization_members
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 
 -- ---------------------------------------------------------------------------
 -- ISSUE 1: Atomic seat check + member insertion (race condition fix)

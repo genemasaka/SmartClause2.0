@@ -4,12 +4,13 @@ Handles all database operations with proper error handling and connection poolin
 """
 
 import os
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, date  # Added date import
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import json
 import logging
+import streamlit as st
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -180,8 +181,12 @@ class DatabaseManager:
     ) -> Dict[str, Any]:
         """Create a new matter."""
         try:
+            org = self.get_user_organization(self.user_id)
+            org_id = org["id"] if org else None
+
             data = {
                 "user_id": self.user_id,
+                "organization_id": org_id,
                 "name": name,
                 "client_name": client_name,
                 "counterparty": counterparty,
@@ -207,15 +212,44 @@ class DatabaseManager:
             logger.error(f"Error creating matter: {e}")
             raise
     
+    def _base_matters_query(self, select_fields: str = "*"):
+        """Returns a query builder for matters the user has access to."""
+        org = self.get_user_organization(self.user_id)
+        role = "member"
+        org_id = None
+        
+        if org:
+            org_id = org.get("id")
+            for m in org.get("organization_members", []):
+                if m.get("user_id") == self.user_id:
+                    role = m.get("role", "member")
+                    break
+                    
+        query = self.client.table("matters").select(select_fields).is_("deleted_at", None)
+        
+        if role in ["owner", "admin"] and org_id:
+            # Owner and Admin can see all team matters
+            return query.eq("organization_id", org_id)
+        else:
+            # Member can see their own matters OR matters explicitly granted to them
+            access_records = self.client.table("matter_access").select("matter_id").eq("user_id", self.user_id).execute()
+            access_ids = [r["matter_id"] for r in access_records.data] if access_records.data else []
+            
+            if access_ids:
+                ids_str = ",".join(access_ids)
+                return query.or_(f"user_id.eq.{self.user_id},id.in.({ids_str})")
+            else:
+                return query.eq("user_id", self.user_id)
+
     def get_matters(
         self,
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """Get all matters for the current user."""
+        """Get all matters accessible to the current user."""
         try:
-            query = self.client.table("matters").select("*").eq("user_id", self.user_id).is_("deleted_at", None)
+            query = self._base_matters_query()
             
             if status:
                 query = query.eq("status", status)
@@ -230,9 +264,9 @@ class DatabaseManager:
             return []
     
     def get_matter(self, matter_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific matter by ID."""
+        """Get a specific matter by ID, checking permissions."""
         try:
-            result = self.client.table("matters").select("*").eq("id", matter_id).eq("user_id", self.user_id).is_("deleted_at", None).single().execute()
+            result = self._base_matters_query().eq("id", matter_id).single().execute()
             
             # Update last accessed
             self.client.table("matters").update({"last_accessed_at": datetime.now().isoformat()}).eq("id", matter_id).execute()
@@ -250,7 +284,12 @@ class DatabaseManager:
     ) -> Optional[Dict[str, Any]]:
         """Update a matter."""
         try:
-            result = self.client.table("matters").update(updates).eq("id", matter_id).eq("user_id", self.user_id).execute()
+            # Ensure access first
+            matter = self.get_matter(matter_id)
+            if not matter:
+                return None
+                
+            result = self.client.table("matters").update(updates).eq("id", matter_id).execute()
             
             self._log_activity(
                 "updated_matter",
@@ -268,10 +307,14 @@ class DatabaseManager:
     def delete_matter(self, matter_id: str, hard_delete: bool = False) -> bool:
         """Delete a matter (soft delete by default)."""
         try:
+            matter = self.get_matter(matter_id)
+            if not matter:
+                return False
+                
             if hard_delete:
-                self.client.table("matters").delete().eq("id", matter_id).eq("user_id", self.user_id).execute()
+                self.client.table("matters").delete().eq("id", matter_id).execute()
             else:
-                self.client.table("matters").update({"deleted_at": datetime.now().isoformat()}).eq("id", matter_id).eq("user_id", self.user_id).execute()
+                self.client.table("matters").update({"deleted_at": datetime.now().isoformat()}).eq("id", matter_id).execute()
             
             self._log_activity(
                 "deleted_matter",
@@ -287,9 +330,9 @@ class DatabaseManager:
             return False
     
     def search_matters(self, query: str) -> List[Dict[str, Any]]:
-        """Full-text search across matters."""
+        """Full-text search across accessible matters."""
         try:
-            result = self.client.table("matters").select("*").eq("user_id", self.user_id).is_("deleted_at", None).text_search("search_vector", query).execute()
+            result = self._base_matters_query().text_search("search_vector", query).execute()
             
             return result.data
         
@@ -448,7 +491,8 @@ class DatabaseManager:
         try:
             result = self.client.table("documents").update({
                 "status": status,
-                "last_edited_at": datetime.now().isoformat()
+                "last_edited_at": datetime.now().isoformat(),
+                "last_edited_by": self.user_id
             }).eq("id", document_id).execute()
             
             return result.data[0] if result.data else None
@@ -610,7 +654,8 @@ class DatabaseManager:
             # Update document's current_version_id
             self.client.table("documents").update({
                 "current_version_id": version_id,
-                "last_edited_at": datetime.now().isoformat()
+                "last_edited_at": datetime.now().isoformat(),
+                "last_edited_by": self.user_id
             }).eq("id", document_id).execute()
             
             self._log_activity(
@@ -699,17 +744,27 @@ class DatabaseManager:
         try:
             word_count = len(content_plain.split())
             
+            # Update the version itself
             result = self.client.table("document_versions").update({
                 "content": content,
                 "content_plain": content_plain,
                 "word_count": word_count,
             }).eq("id", version_id).execute()
             
+            if result.data:
+                # Also update the document metadata for "Last Edited" tracking
+                document_id = result.data[0].get("document_id")
+                if document_id:
+                    self.client.table("documents").update({
+                        "last_edited_at": datetime.now().isoformat(),
+                        "last_edited_by": self.user_id
+                    }).eq("id", document_id).execute()
+            
             return result.data[0] if result.data else None
         
         except Exception as e:
             logger.error(f"Error updating version content for {version_id}: {e}")
-            return None    
+            return None
     # =========================================================================
     # CLAUSE LIBRARY OPERATIONS
     # =========================================================================
@@ -1161,7 +1216,7 @@ class DatabaseManager:
             
             return result.data
         
-        except Exception as e:
+        except Exception:
             # If no settings exist, return defaults
             return self._default_settings()
     
@@ -1331,7 +1386,7 @@ class DatabaseManager:
         try:
             result = self.client.table("user_subscriptions").select("*").eq("user_id", user_id).single().execute()
             return result.data
-        except Exception as e:
+        except Exception:
             # Silence error as it's common for new users to not have one yet
             return None
 
@@ -1444,21 +1499,21 @@ class DatabaseManager:
             )
             return None
 
-        def update_payment_status(self, checkout_request_id: str, status: str, receipt_number: Optional[str] = None) -> Dict[str, Any]:
-            """Update status of a payment transaction."""
-            try:
-                updates = {
-                    "payment_status": status
-                    # "updated_at": datetime.now().isoformat()  # Column not in schema
-                }
-                if receipt_number:
-                    updates["mpesa_receipt_number"] = receipt_number
-                    
-                self.client.table("payment_transactions").update(updates).eq("checkout_request_id", checkout_request_id).execute()
-                return True
-            except Exception as e:
-                logger.error(f"Error updating payment status: {e}")
-                return False
+    def update_payment_status(self, checkout_request_id: str, status: str, receipt_number: Optional[str] = None) -> bool:
+        """Update status of a payment transaction."""
+        try:
+            updates = {
+                "payment_status": status
+                # "updated_at": datetime.now().isoformat()  # Column not in schema
+            }
+            if receipt_number:
+                updates["mpesa_receipt_number"] = receipt_number
+                
+            self.client.table("payment_transactions").update(updates).eq("checkout_request_id", checkout_request_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating payment status: {e}")
+            return False
 
     def get_user_payment_history(self, user_id: str) -> List[Dict[str, Any]]:
         """Get payment history for a user."""
@@ -1533,7 +1588,7 @@ class DatabaseManager:
         admin_user_id: str,
         subscription_tier: str,
         billing_email: str
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """Create a new organization."""
         try:
             data = {
@@ -1571,19 +1626,53 @@ class DatabaseManager:
             return None
     
     def get_user_organization(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user's organization."""
+        """
+        Get user's organization, prioritizing paid tiers.
+        Uses admin client to ensure all organizations the user is a member of are found,
+        bypassing RLS for the lookup itself (filtered by user_id).
+        """
         try:
-            result = self.client.table("organizations")\
+            # Use service role client if available to bypass RLS and see all org memberships
+            url = os.getenv("SUPABASE_URL")
+            service_key = os.getenv("SUPABASE_SERVICE_KEY")
+            
+            if not url or not service_key:
+                logger.warning("Missing Supabase Service Key; falling back to standard client for organization lookup.")
+                client = self.client
+            else:
+                from supabase import create_client as admin_create_client
+                client = admin_create_client(url, service_key.strip())
+
+            # Query organizations and inner join organization_members to filter by user_id
+            result = client.table("organizations")\
                 .select("*, organization_members!inner(user_id, role, status)")\
                 .eq("organization_members.user_id", user_id)\
                 .eq("organization_members.status", "active")\
-                .single()\
                 .execute()
             
-            return result.data
+            if result.data and len(result.data) > 0:
+                # Prioritize paid tiers: enterprise > team > individual > trial
+                tier_priority = {"enterprise": 4, "team": 3, "individual": 2, "trial": 1}
+                
+                def get_priority(org):
+                    tier = (org.get("subscription_tier") or "trial").strip().lower()
+                    return tier_priority.get(tier, 0)
+
+                sorted_orgs = sorted(
+                    result.data, 
+                    key=get_priority, 
+                    reverse=True
+                )
+                
+                selected_org = sorted_orgs[0]
+                logger.info(f"Selected organization '{selected_org.get('name')}' (tier: {selected_org.get('subscription_tier')}) for user {user_id}")
+                return selected_org
+            
+            logger.debug(f"No active organization found for user {user_id}")
+            return None
         
         except Exception as e:
-            logger.debug(f"No organization found for user {user_id}: {e}")
+            logger.error(f"Error fetching organization for user {user_id}: {e}")
             return None
     
     def create_organization_subscription(
@@ -1592,7 +1681,7 @@ class DatabaseManager:
         subscription_tier: str,
         seats_purchased: int,
         price_per_seat: int
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """Create organization subscription."""
         try:
             period_start = datetime.now()
@@ -1664,6 +1753,60 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error ensuring organization subscription: {e}")
             return None
+            
+    def update_org_member_role(self, organization_id: str, member_user_id: str, new_role: str) -> bool:
+        """Update a member's role within an organization."""
+        try:
+            self.client.table("organization_members").update({
+                "role": new_role,
+                "updated_at": datetime.now().isoformat()
+            }).eq("organization_id", organization_id).eq("user_id", member_user_id).execute()
+            
+            self._log_activity(
+                "updated_member_role",
+                "organization",
+                organization_id,
+                f"Updated member role to {new_role}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error updating member role: {e}")
+            return False
+
+    def grant_matter_access(self, matter_id: str, user_id: str, access_level: str = "edit") -> bool:
+        """Grant a user access to a specific matter."""
+        try:
+            data = {
+                "matter_id": matter_id,
+                "user_id": user_id,
+                "granted_by": self.user_id,
+                "access_level": access_level
+            }
+            # Upsert access
+            self.client.table("matter_access").upsert(data, on_conflict="matter_id, user_id").execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error granting matter access: {e}")
+            return False
+
+    def revoke_matter_access(self, matter_id: str, user_id: str) -> bool:
+        """Revoke a user's access to a specific matter."""
+        try:
+            self.client.table("matter_access").delete().eq("matter_id", matter_id).eq("user_id", user_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error revoking matter access: {e}")
+            return False
+
+    def get_matter_access(self, matter_id: str) -> List[Dict[str, Any]]:
+        """Get all users who have explicit access to this matter."""
+        try:
+            result = self.client.table("matter_access").select("*").eq("matter_id", matter_id).execute()
+            return result.data
+        except Exception as e:
+            logger.error(f"Error fetching matter access: {e}")
+            return []
+
     def add_organization_member(
         self,
         organization_id: str,
@@ -1731,7 +1874,7 @@ class DatabaseManager:
                 "invited_email": invited_email,
                 "role": role,
                 "invited_by": invited_by,
-                "token": token,
+                "token": token.strip(),
                 "expires_at": expires_at,
                 "status": "pending",
             }
@@ -1766,6 +1909,47 @@ class DatabaseManager:
             return True
         except Exception as e:
             logger.error(f"Error cancelling invitation: {e}")
+            return False
+
+    def get_invitation_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """Look up a pending invitation by its unique token. Uses service role to bypass RLS."""
+        try:
+            clean_token = token.strip()
+            
+            # Use service role client if available to ensure we can see the record
+            url = os.getenv("SUPABASE_URL")
+            key = os.getenv("SUPABASE_SERVICE_KEY")
+            
+            if not url or not key:
+                logger.error("Missing Supabase credentials for admin lookup.")
+                return None
+                
+            from supabase import create_client as admin_create_client
+            admin_client = admin_create_client(url, key)
+
+            result = (
+                admin_client.table("organization_invitations")
+                .select("*")
+                .eq("token", clean_token)
+                .eq("status", "pending")
+                .execute()
+            )
+            
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Error fetching invitation by token: {e}")
+            raise
+            return None
+
+    def update_invitation_status(self, invitation_id: str, status: str) -> bool:
+        """Update the status of an invitation (e.g. to 'accepted')."""
+        try:
+            self.client.table("organization_invitations").update(
+                {"status": status}
+            ).eq("id", invitation_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating invitation status: {e}")
             return False
 
     def record_document_usage(

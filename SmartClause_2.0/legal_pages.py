@@ -111,7 +111,7 @@ def render_privacy_policy():
 <h2>1. Data Controller</h2>
 <p>SmartClause (the "Company", "we", "us") is the data controller responsible for your personal data collected through the SmartClause platform ("Platform"). For any data protection inquiries, contact us at:</p>
 <ul>
-    <li><strong>Email:</strong> privacy@smartclause.co.ke</li>
+    <li><strong>Email:</strong> support@smartclause.net</li>
     <li><strong>Address:</strong> Nairobi, Kenya</li>
 </ul>
 
@@ -211,7 +211,7 @@ def render_privacy_policy():
     <li><strong>Withdraw consent</strong> at any time, without affecting the lawfulness of prior processing (Section 32)</li>
     <li><strong>Lodge a complaint</strong> with the Office of the Data Protection Commissioner (ODPC) at <a href="https://www.odpc.go.ke" target="_blank">www.odpc.go.ke</a></li>
 </ul>
-<p>To exercise any of these rights, email us at <strong>privacy@smartclause.co.ke</strong>. We will respond within 30 days.</p>
+<p>To exercise any of these rights, email us at <strong>support@smartclause.net</strong>. We will respond within 30 days.</p>
 
 <h2>9. Data Security</h2>
 <p>We implement appropriate technical and organizational measures to protect your data, including:</p>
@@ -235,7 +235,7 @@ def render_privacy_policy():
 <h2>13. Contact Us</h2>
 <p>If you have questions about this Privacy Policy or our data practices, reach us at:</p>
 <ul>
-    <li><strong>Email:</strong> privacy@smartclause.co.ke</li>
+    <li><strong>Email:</strong> support@smartclause.net</li>
     <li><strong>ODPC Complaints:</strong> <a href="https://www.odpc.go.ke" target="_blank">www.odpc.go.ke</a></li>
 </ul>
 </div>
@@ -310,7 +310,7 @@ def render_terms_of_use():
 </ul>
 
 <h3>5.3 Refunds</h3>
-<p>Subscription payments are generally non-refundable. However, we may consider refund requests on a case-by-case basis if the Platform was materially unavailable during your billing period. Contact support@smartclause.co.ke for refund inquiries.</p>
+<p>Subscription payments are generally non-refundable. However, we may consider refund requests on a case-by-case basis if the Platform was materially unavailable during your billing period. Contact support@smartclause.net for refund inquiries.</p>
 
 <h2>6. Acceptable Use</h2>
 <p>You agree to use the Platform only for lawful purposes and in accordance with these Terms. You must <strong>not</strong>:</p>
@@ -353,7 +353,7 @@ def render_terms_of_use():
 
 <h2>11. Termination</h2>
 <ul>
-    <li>You may close your account at any time by contacting support@smartclause.co.ke.</li>
+    <li>You may close your account at any time by contacting support@smartclause.net.</li>
     <li>We may suspend or terminate your access for breach of these Terms, non-payment, or any activity that threatens the security or integrity of the Platform.</li>
     <li>Upon termination, your right to use the Platform ceases immediately. We will retain your data in accordance with our Privacy Policy and applicable legal retention requirements.</li>
 </ul>
@@ -375,7 +375,7 @@ def render_terms_of_use():
 <h2>15. Contact Us</h2>
 <p>For questions about these Terms, contact:</p>
 <ul>
-    <li><strong>Email:</strong> support@smartclause.co.ke</li>
+    <li><strong>Email:</strong> support@smartclause.net</li>
     <li><strong>Address:</strong> Nairobi, Kenya</li>
 </ul>
 </div>

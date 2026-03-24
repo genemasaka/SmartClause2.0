@@ -258,7 +258,7 @@ def show_payment_success(tier: Optional[str] = None):
 def show_payment_error(message: str):
     """Display a user-friendly payment error."""
     st.error(f"❌ Payment failed: {message}")
-    st.info("If your M-Pesa was charged, please contact support at **support@smartclause.co.ke** with your phone number.")
+    st.info("If your M-Pesa was charged, please contact support at **support@smartclause.net** with your phone number.")
 
 
 def show_payment_verification_spinner(message: str = "Verifying payment…"):

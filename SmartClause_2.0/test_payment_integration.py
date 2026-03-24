@@ -49,13 +49,13 @@ class TestPaymentIntegration(unittest.TestCase):
         )
         
         self.assertTrue(result["success"])
-        self.assertEqual(result["amount"], 8500)
+        self.assertEqual(result["amount"], 85)
         
         # Verify DB call
         self.mock_db.create_payment_transaction.assert_called_once()
         args, kwargs = self.mock_db.create_payment_transaction.call_args
         
-        self.assertEqual(kwargs["amount"], 8500)
+        self.assertEqual(kwargs["amount"], 85)
         self.assertEqual(kwargs["seats"], 1)
         self.assertEqual(kwargs["tier"], INDIVIDUAL_TIER)
         
@@ -65,7 +65,7 @@ class TestPaymentIntegration(unittest.TestCase):
         org_id = "org_456"
         phone = "254700000000"
         seats = 5
-        expected_amount = 6500 * 5
+        expected_amount = 65 * 5
         
         self.mock_mpesa.initiate_stk_push.return_value = {
             "ResponseCode": "0",
@@ -105,6 +105,9 @@ class TestPaymentIntegration(unittest.TestCase):
             }
         }
         
+        self.mock_db.get_user_organization.return_value = {"id": org_id, "name": "Test Org"}
+        self.mock_db.upgrade_org_tier_atomic.return_value = {"success": True, "organization_id": org_id, "tier": INDIVIDUAL_TIER}
+        
         # Mock M-Pesa query response
         self.mock_mpesa.query_stk_push.return_value = {
             "ResultCode": "0",
@@ -116,12 +119,13 @@ class TestPaymentIntegration(unittest.TestCase):
         self.assertTrue(result["success"])
         
         # Verify subscription creation
-        self.mock_db.create_organization_subscription.assert_called_once()
-        args, kwargs = self.mock_db.create_organization_subscription.call_args
+        # Verify subscription creation
+        self.mock_db.upgrade_org_tier_atomic.assert_called_once()
+        args, kwargs = self.mock_db.upgrade_org_tier_atomic.call_args
         
         self.assertEqual(kwargs["organization_id"], org_id)
-        self.assertEqual(kwargs["subscription_tier"], INDIVIDUAL_TIER)
-        self.assertEqual(kwargs["seats_purchased"], 1)
+        self.assertEqual(kwargs["new_tier"], INDIVIDUAL_TIER)
+        self.assertEqual(kwargs["seats"], 1)
 
 if __name__ == "__main__":
     unittest.main()

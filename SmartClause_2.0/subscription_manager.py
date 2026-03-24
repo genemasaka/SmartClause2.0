@@ -53,14 +53,14 @@ PRICING = {
 # Feature Flags
 # Trial users get access to core features (document_editor, ai_chatbot) but NOT premium features
 FEATURES = {
-    "document_editor": [TRIAL_TIER, INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
+    "document_editor": [INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
     "clause_library": [INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
     "admin_dashboard": [TEAM_TIER, ENTERPRISE_TIER],
     "sso": [ENTERPRISE_TIER],
     "api_access": [ENTERPRISE_TIER],
     "custom_templates": [TEAM_TIER, ENTERPRISE_TIER],
     "priority_support": [TEAM_TIER, ENTERPRISE_TIER],
-    "ai_chatbot": [TRIAL_TIER, INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
+    "ai_chatbot": [INDIVIDUAL_TIER, TEAM_TIER, ENTERPRISE_TIER],
 }
 
 

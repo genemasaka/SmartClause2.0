@@ -1,10 +1,11 @@
 import streamlit as st
 from datetime import datetime
 from database import DatabaseManager
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import logging
 from error_helpers import show_error
-from analytics import Analytics
+from organization_manager import get_user_role_from_org
+
 
 def get_time_ago(dt: datetime) -> str:
     """Helper to show relative time."""
@@ -225,7 +226,7 @@ def render_matter_details():
     """Render the matter details page."""
     
     # CRITICAL: Track the current page view to detect navigation
-    current_view = st.query_params.get("view", "matters")
+    st.query_params.get("view", "matters")
     current_matter_id = st.query_params.get("matter_id")
     last_view = st.session_state.get("last_viewed_page", None)
     last_matter_id = st.session_state.get("last_matter_id", None)
@@ -239,19 +240,28 @@ def render_matter_details():
         
         if action == "edit_matter":
             st.session_state["show_new_matter"] = False
-            st.session_state["show_search_modal"] = False  # Clear conflict
+            st.session_state["show_search_modal"] = False
             st.session_state["modal_mode"] = None
             st.session_state["existing_matter_id"] = None
+            st.session_state["show_manage_access"] = False
             st.session_state["show_edit_matter"] = True
-            # Clear action to prevent re-triggering
             st.query_params["action"] = None
             st.rerun()
         elif action == "new_document":
             st.session_state["show_edit_matter"] = False
+            st.session_state["show_manage_access"] = False
             st.session_state["show_new_matter"] = True
-            st.session_state["show_search_modal"] = False  # Clear conflict
+            st.session_state["show_search_modal"] = False
             st.session_state["modal_mode"] = "new_document"
             st.session_state["existing_matter_id"] = current_matter_id
+            st.query_params["action"] = None
+            st.rerun()
+        elif action == "manage_access":
+            st.session_state["show_edit_matter"] = False
+            st.session_state["show_new_matter"] = False
+            st.session_state["show_search_modal"] = False
+            st.session_state["modal_mode"] = None
+            st.session_state["show_manage_access"] = True
             st.query_params["action"] = None
             st.rerun()
     
@@ -260,6 +270,7 @@ def render_matter_details():
         st.session_state["show_new_matter"] = False
         st.session_state["modal_mode"] = None
         st.session_state["show_edit_matter"] = False
+        st.session_state["show_manage_access"] = False
         st.session_state["existing_matter_id"] = None
     
     # Update the last viewed page and matter
@@ -318,6 +329,12 @@ def render_matter_details():
     # Store matter in session state for modal access
     st.session_state["current_matter"] = matter
     
+    org = db.get_user_organization(st.session_state["user_id"])
+    user_role = get_user_role_from_org(org, st.session_state["user_id"]) if org else "member"
+    
+    is_owner_admin = user_role in ["owner", "admin"]
+    is_creator = matter.get("user_id") == st.session_state["user_id"]
+    
     # OPTIMIZATION: Don't load full content for the list view
     # Fetch documents with metadata in one go (already optimized in db.get_documents)
     # Check if we have cached documents for this matter to avoid re-fetching on small UI changes
@@ -346,6 +363,22 @@ def render_matter_details():
             # Bulk query is ordered by version_number desc, so index 0 is latest
             d['version_metadata'] = d_vers[0] if d_vers else {}
             
+        # Get user names for the last editors
+        editor_uids = list(set([d.get("last_edited_by") or (d.get("version_metadata") or {}).get("created_by") for d in all_documents]))
+        editor_uids = [u for u in editor_uids if u]
+        editors_meta = getattr(db, 'get_users_metadata', lambda x: {})(editor_uids) if editor_uids else {}
+        
+        for d in all_documents:
+            uid = d.get("last_edited_by") or (d.get("version_metadata") or {}).get("created_by")
+            if uid and uid in editors_meta:
+                meta = editors_meta[uid]
+                name = meta.get("full_name") or meta.get("email")
+                if name and "@" in name:
+                    name = name.split("@")[0]
+                d["last_editor_name"] = name
+            else:
+                d["last_editor_name"] = None
+                
         st.session_state[cache_key] = all_documents
         st.session_state["_refresh_docs"] = False
     else:
@@ -379,10 +412,22 @@ def render_matter_details():
 """, unsafe_allow_html=True)
     
     # Action Links serving as buttons - styled exactly like "Back to Matters"
-    edit_url = f"?view=matters&matter_id={matter_id}&action=edit_matter{session_param}"
     # Note: Using current URL + action
     current_url_base = f"?view=matter_details&matter_id={matter_id}{session_param}"
     
+    manage_access_btn = ""
+    if is_owner_admin or is_creator:
+        manage_access_btn = f"""
+  <a href="{current_url_base}&action=manage_access" target="_self" class="sc-btn sc-btn-secondary" style="min-width: 140px; text-decoration: none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="9" cy="7" r="4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Manage Access</span>
+  </a>"""
+
     st.markdown(f"""
 <div style="display: flex; gap: 12px; margin-bottom: 24px;">
   <a href="{current_url_base}&action=edit_matter" target="_self" class="sc-btn sc-btn-secondary" style="min-width: 140px; text-decoration: none;">
@@ -391,7 +436,7 @@ def render_matter_details():
       <path d="M18.5 2.5a2.121 2 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <span>Edit Matter</span>
-  </a>
+  </a>{manage_access_btn}
   <a href="{current_url_base}&action=new_document" target="_self" class="sc-btn sc-btn-primary" style="min-width: 140px; text-decoration: none;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -563,11 +608,9 @@ def render_matter_details():
           <span>{doc.get("document_type", "Document")}</span>
           {f'<span style="opacity: 0.5;">•</span><span>{doc.get("document_subtype")}</span>' if doc.get("document_subtype") else ""}
           <span style="opacity: 0.5;">•</span>
-          <span>{word_count:,} words</span>
-          <span style="opacity: 0.5;">•</span>
           <span>{version_count} version{"s" if version_count != 1 else ""}</span>
           <span style="opacity: 0.5;">•</span>
-          <span>{created_ago}</span>
+          <span>Edited {created_ago}{f" by {doc['last_editor_name']}" if doc.get('last_editor_name') else ""}</span>
         </div>
       </div>
     </div>
@@ -791,8 +834,70 @@ def render_matter_details():
     # CRITICAL: Only render edit modal if explicitly requested AND not showing new matter modal
     should_show_edit_modal = (
         st.session_state.get("show_edit_matter", False) and
-        not st.session_state.get("show_new_matter", False)
+        not st.session_state.get("show_new_matter", False) and
+        not st.session_state.get("show_manage_access", False)
     )
     
     if should_show_edit_modal:
         render_edit_matter_modal(matter, db)
+        
+    if st.session_state.get("show_manage_access", False) and (is_owner_admin or is_creator):
+        @st.dialog("Manage Matter Access", width="large")
+        def manage_access_dialog():
+            st.markdown("### Team Permissions")
+            st.markdown("Configure which team members can view and interact with this matter and its documents.")
+            
+            # Fetch organization members
+            if org:
+                # Fetch accesses first
+                accesses = db.get_matter_access(matter_id)
+                access_map = {a.get("user_id"): a for a in accesses}
+                
+                members = db.client.table("organization_members").select("*").eq("organization_id", org["id"]).eq("status", "active").execute().data
+                
+                if members:
+                    uids = [m.get("user_id") for m in members if m.get("user_id")]
+                    users_meta = getattr(db, 'get_users_metadata', lambda x: {})(uids) if uids else {}
+                    
+                    for member in members:
+                        uid = member.get("user_id")
+                        member_role = member.get("role")
+                        user_info = users_meta.get(uid, {})
+                        
+                        name = user_info.get("full_name") or user_info.get("name") or user_info.get("email") or "Unknown Member"
+                        email_display = user_info.get("email", "")
+                        
+                        col_info, col_status, col_btn = st.columns([4, 2, 2])
+                        with col_info:
+                            st.write(f"**{name}**")
+                            st.caption(f"{email_display}")
+                        
+                        # Owners and Admins inherently have access
+                        if member_role in ['owner', 'admin'] or uid == matter.get("user_id"):
+                            with col_status:
+                                st.write("Full Access")
+                            with col_btn:
+                                st.button("Locked (Role based)", key=f"ma_lk_{uid}", disabled=True)
+                        else:
+                            has_access = uid in access_map
+                            with col_status:
+                                st.write("Explicit Access" if has_access else "No Access")
+                            with col_btn:
+                                if has_access:
+                                    if st.button("Revoke Access", key=f"ma_rev_{uid}"):
+                                        db.revoke_matter_access(matter_id, uid)
+                                        st.success(f"Revoked access for {name}")
+                                        import time; time.sleep(0.5)
+                                        st.rerun()
+                                else:
+                                    if st.button("Grant Access", key=f"ma_gnt_{uid}"):
+                                        db.grant_matter_access(matter_id, uid, "edit")
+                                        st.success(f"Granted access to {name}")
+                                        import time; time.sleep(0.5)
+                                        st.rerun()
+                                        
+            if st.button("Close", key="ma_close", type="primary"):
+                st.session_state["show_manage_access"] = False
+                st.rerun()
+                
+        manage_access_dialog()

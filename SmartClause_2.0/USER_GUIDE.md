@@ -90,4 +90,4 @@ Stop hunting through old folders for that "one perfect clause."
 
 ---
 
-*For support, contact us at **support@smartclause.co.ke***
+*For support, contact us at **support@smartclause.net***

@@ -1,12 +1,17 @@
 import streamlit as st
-import time
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from clause_library import render_clause_library 
 from export import render_exports
 from settings import render_settings
 from new_matter_modal import render_new_matter_modal
 from document_editor import render_document_editor
 from database import DatabaseManager
-from auth import check_authentication, logout
+from auth import check_authentication, logout, update_query_params
 from matter_actions import handle_pin_matter, handle_archive_matter, handle_delete_matter
 from search import render_search_modal
 from pricing_page import render_pricing_page
@@ -22,6 +27,14 @@ st.set_page_config(
     page_icon="assets/smartclause_badge.png",
     layout="wide",
     initial_sidebar_state="collapsed",
+)
+
+# ============================================================================
+# GENERATION FOCUS MODE FLAG - Used for routing
+# ============================================================================
+is_generating = (
+    st.session_state.get("new_matter_payload") and 
+    not st.session_state.get("generation_complete")
 )
 
 # ============================================================================
@@ -103,13 +116,20 @@ def preserve_navigation_state():
             if "session_navigation" not in st.session_state:
                 st.session_state["session_navigation"] = {}
             st.session_state["session_navigation"]["matter_id"] = matter_id
+
+        if "invite_token" in st.query_params:
+            token = st.query_params.get("invite_token")
+            st.session_state["preserved_invite_token"] = token
+            if "session_navigation" not in st.session_state:
+                st.session_state["session_navigation"] = {}
+            st.session_state["session_navigation"]["invite_token"] = token
         
         # CRITICAL: Preserve generation state if in editor
         if "view" in st.query_params and st.query_params.get("view") == "editor":
             # Mark that we're in editor mode to prevent false "no data" errors
             st.session_state["editor_mode_active"] = True
             
-    except Exception as e:
+    except Exception:
         # Silently fail to avoid breaking the app
         pass
 
@@ -166,9 +186,15 @@ if "session_navigation" in st.session_state:
         except:
             pass
     
-    if "matter_id" in nav and "matter_id" not in st.query_params:
         try:
             st.query_params["matter_id"] = nav["matter_id"]
+        except:
+            pass
+    
+    if "invite_token" in nav and "invite_token" not in st.query_params:
+        try:
+            st.query_params["invite_token"] = nav["invite_token"]
+            st.session_state["preserved_invite_token"] = nav["invite_token"]
         except:
             pass
 
@@ -199,6 +225,11 @@ def get_database():
     # Cache cleared for performance optimization updates
     return DatabaseManager()
 
+# Temporary force clear to ensure new methods are picked up
+if "db_cache_cleared_v2" not in st.session_state:
+    st.cache_resource.clear()
+    st.session_state["db_cache_cleared_v2"] = True
+
 db = get_database()
 
 # Set user_id from authenticated session
@@ -218,9 +249,22 @@ if st.session_state.get("user_id"):
 # Initialize Subscription Manager
 @st.cache_resource
 def get_subscription_manager():
-    return SubscriptionManager(get_database())
+    sm = SubscriptionManager(get_database())
+    return sm
 
 subscription_mgr = get_subscription_manager()
+
+# Proactive Organization Initialization
+# Ensures every logged-in user has at least a 'trial' organization record.
+# Without this, individual signups might lack an org row, breaking the payment flow.
+if st.session_state.get("authenticated") and st.session_state.get("user_id"):
+    # We only need to run this once or when an org is missing.
+    # initialize_user_subscription is idempotent (get_or_create).
+    subscription_mgr.initialize_user_subscription(
+        user_id=st.session_state["user_id"],
+        user_email=st.session_state.get("email", ""),
+        user_name=st.session_state.get("full_name")
+    )
 
 # ============================================================================
 # ROUTING & QUERY PARAMS
@@ -253,6 +297,77 @@ def check_new_matter_trigger():
 
 check_new_matter_trigger()
 
+def check_invitation_trigger():
+    """Check if the user has an active invitation to join an organization."""
+    if not st.session_state.get("authenticated") or not st.session_state.get("user_id"):
+        return
+
+    # Look for token in query params or session
+    invite_token = st.query_params.get("invite_token") or st.session_state.get("preserved_invite_token")
+    
+    if not invite_token:
+        return
+
+    try:
+        # 1. Validate the token
+        invitation = db.get_invitation_by_token(invite_token)
+        
+        if not invitation:
+            # Token invalid, already used (accepted), or expired. 
+            # We silently clear it to avoid redundant warnings if the user already joined.
+            st.session_state.pop("preserved_invite_token", None)
+            if "invite_token" in st.query_params:
+                from auth import update_query_params
+                new_params = st.query_params.to_dict()
+                new_params.pop("invite_token", None)
+                update_query_params(new_params)
+            return
+
+        # 2. Add user to the organization
+        result = db.add_organization_member_atomic(
+            organization_id=invitation["organization_id"],
+            user_id=st.session_state["user_id"],
+            role=invitation["role"],
+            invited_by=invitation["invited_by"]
+        )
+        
+        if result.get("success"):
+            # 3. Mark invitation as accepted
+            db.update_invitation_status(invitation["id"], "accepted")
+            
+            # 4. Notify user
+            st.toast(f"✅ Successfully joined {invitation.get('organization_name', 'the team')}!")
+            
+            # 5. Clear the token immediately
+            st.session_state.pop("preserved_invite_token", None)
+            if "invite_token" in st.query_params:
+                from auth import update_query_params
+                new_params = st.query_params.to_dict()
+                new_params.pop("invite_token", None)
+                update_query_params(new_params)
+            
+            # 6. Clear all subscription and database caches to switch context immediately
+            st.cache_resource.clear()
+            st.rerun()
+        else:
+            error_msg = result.get("error", "Unknown error adding to team")
+            # If they are already a member, just clear the token silently
+            if "already a member" in error_msg.lower():
+                 st.session_state.pop("preserved_invite_token", None)
+                 if "invite_token" in st.query_params:
+                    from auth import update_query_params
+                    new_params = st.query_params.to_dict()
+                    new_params.pop("invite_token", None)
+                    update_query_params(new_params)
+                 return
+                 
+            st.error(f"Failed to join team: {error_msg}")
+            
+    except Exception as e:
+        logger.error(f"Error processing invitation: {e}", exc_info=True)
+
+check_invitation_trigger()
+
 def get_view() -> str:
     """Query-param router with fallback to session state."""
     try:
@@ -266,307 +381,311 @@ def get_view() -> str:
 
 view = get_view()
 
+# Override view for generation focus mode
+if is_generating:
+    view = "generation_focus"
+
 # Track page visit
 Analytics().track_page_visit(view)
 
 # ============================================================================
 # SIDEBAR
 # ============================================================================
-with st.sidebar:
-    # Handle logout action triggered from the footer HTML button
-    if st.query_params.get("action") == "logout":
-        logout()
+if view != "generation_focus":
+    with st.sidebar:
+        # Handle logout action triggered from the footer HTML button
+        if st.query_params.get("action") == "logout":
 
-    # Robust sidebar styling with absolute positioned footer
-    st.markdown("""
-    <style>
-    /* Force sidebar to use relative positioning for absolute footer */
-    [data-testid="stSidebar"] {
-        position: relative;
-    }
-    
-    /* Ensure sidebar content is scrollable with space for footer */
-    section[data-testid="stSidebar"] > div {
-        padding-bottom: 80px !important; /* Space for fixed footer */
-    }
-    
-    /* Sidebar footer - absolutely positioned at bottom */
-    .sidebar-footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 250px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        background: #1E1E1E;
-        z-index: 999;
-        box-sizing: border-box;
-    }
-    
-    /* Adjust for expanded sidebar */
-    [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
-        width: 250px;
-    }
-    
-    .sidebar-footer-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .sidebar-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #4B9EFF, #2D7DD2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-        flex-shrink: 0;
-    }
-    
-    .sidebar-user-info {
-        flex: 1;
-        min-width: 0;
-    }
-    
-    .sidebar-user-email {
-        color: #FFFFFF;
-        font-size: 13px;
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-    
-    /* Modern navigation with pill-shaped active state */
-    .modern-nav {
-        padding: 8px 12px;
-    }
-    
-    .modern-nav-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 12px;
-        min-height: 38px;
-        margin: 4px 0;
-        border-radius: 8px;
-        color: #FFFFFF !important;
-        text-decoration: none !important;
-        font-size: 14px;
-        font-weight: 400;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-    
-    .modern-nav-item:hover {
-        background: rgba(255, 255, 255, 0.07);
-        color: #FFFFFF !important;
-        text-decoration: none !important;
-    }
-    
-    .modern-nav-item.active {
-        background: #252930;
-        color: #FFFFFF !important;
-        font-weight: 500;
-        text-decoration: none !important;
-    }
-    
-    .modern-nav-item span {
-        color: #FFFFFF !important;
-    }
-    
-    .modern-nav-item svg {
-        flex-shrink: 0;
-        opacity: 0.9;
-    }
-    
-    .tier-tag {
-        display: inline-block;
-        margin-left: auto;
-        padding: 2px 8px;
-        background: rgba(74, 222, 128, 0.15);
-        color: #4ADE80;
-        font-size: 10px;
-        font-weight: 600;
-        border-radius: 4px;
-        text-transform: uppercase;
-    }
-    
-    /* Slimmer buttons */
-    [data-testid="stSidebar"] button[kind="primary"],
-    [data-testid="stSidebar"] button[kind="secondary"],
-    [data-testid="stSidebar"] .stButton > button {
-        min-height: 32px !important;
-        padding: 6px 12px !important;
-        font-size: 13px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+            logout()
 
-
-    
-    # Logo
-    try:
-        import base64
-        import os
-        logo_path = "assets/sidebar_logo.png"
-        if os.path.exists(logo_path):
-            with open(logo_path, "rb") as f:
-                data = base64.b64encode(f.read()).decode("utf-8")
-            st.markdown(
-                f"""
-                <div style="display: flex; justify-content: center; margin: 12px 0;">
-                    <img src="data:image/png;base64,{data}" style="width: 80%; height: auto; border: none; background: transparent;">
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-    except Exception:
-        pass
-
-    # New Matter Button
-    if st.button("New Matter", key="sidebar_new_matter", use_container_width=True, type="primary"):
-        st.session_state["show_new_matter"] = True
-        st.session_state["show_search_modal"] = False
-        st.session_state["show_edit_matter"] = False
-        st.session_state["modal_mode"] = "new_matter"
-        st.session_state["existing_matter_id"] = None
-        st.rerun()
-
-
-    # Search Button (Modal-based)
-    st.markdown('<div style="margin: 0 16px 16px 16px;">', unsafe_allow_html=True)
-    
-    # Initialize search modal state
-    if "show_search_modal" not in st.session_state:
-        st.session_state["show_search_modal"] = False
-    
-    # Get current view for search context
-    view = get_view()
-    
-    # Search button that opens modal
-    if st.button(
-        f"Search {'clauses' if view=='clause_library' else 'matters'}",
-        key="search_trigger_btn",
-        use_container_width=True,
-        type="secondary"
-    ):
-        st.session_state["show_search_modal"] = True
-        st.session_state["show_new_matter"] = False
-        st.session_state["show_edit_matter"] = False
-        st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Get session param helper
-    def get_session_param():
-        """Get session parameter for URLs."""
-        session_cookie = st.session_state.get("session_cookie", "")
-        if session_cookie:
-            return f"&session={session_cookie}"
-        return ""
-
-    session_param = get_session_param()
-    
-    # Get subscription info for tier tag
-    user_id = st.session_state.get("user_id")
-    tier_display = ""
-    if user_id:
-        status = subscription_mgr.get_user_status(user_id)
-        tier = status.get("tier", "trial")
-        documents_remaining = status.get("documents_remaining")
+        # Robust sidebar styling with absolute positioned footer
+        st.markdown("""
+        <style>
+        /* Force sidebar to use relative positioning for absolute footer */
+        [data-testid="stSidebar"] {
+            position: relative;
+        }
         
-        # Determine tier display
-        if tier == "enterprise":
-            tier_display = '<span class="tier-tag">Unlimited</span>'
-        elif tier == "team":
-            tier_display = '<span class="tier-tag">Team</span>'
-        elif tier == "individual":
-            tier_display = f'<span class="tier-tag">{documents_remaining or 0} docs</span>'
-        elif tier == "trial":
-            tier_display = '<span class="tier-tag" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">Trial</span>'
-    
-    # Modern Navigation with icons
-    st.markdown(f"""
-    <div class="modern-nav">
-        <a class="modern-nav-item {'active' if view in ['matters', 'matter_details'] else ''}" href="?view=matters{session_param}" target="_self">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
-                <path d="M2.50047 13H8.50047M15.5005 13H21.5005M12.0005 7V21M12.0005 7C13.3812 7 14.5005 5.88071 14.5005 4.5M12.0005 7C10.6198 7 9.50047 5.88071 9.50047 4.5M4.00047 21L20.0005 21M4.00047 4.50001L9.50047 4.5M9.50047 4.5C9.50047 3.11929 10.6198 2 12.0005 2C13.3812 2 14.5005 3.11929 14.5005 4.5M14.5005 4.5L20.0005 4.5M8.88091 14.3364C8.48022 15.8706 7.11858 17 5.50047 17C3.88237 17 2.52073 15.8706 2.12004 14.3364C2.0873 14.211 2.07093 14.1483 2.06935 13.8979C2.06838 13.7443 2.12544 13.3904 2.17459 13.2449C2.25478 13.0076 2.34158 12.8737 2.51519 12.6059L5.50047 8L8.48576 12.6059C8.65937 12.8737 8.74617 13.0076 8.82636 13.2449C8.87551 13.3904 8.93257 13.7443 8.9316 13.8979C8.93002 14.1483 8.91365 14.211 8.88091 14.3364ZM21.8809 14.3364C21.4802 15.8706 20.1186 17 18.5005 17C16.8824 17 15.5207 15.8706 15.12 14.3364C15.0873 14.211 15.0709 14.1483 15.0693 13.8979C15.0684 13.7443 15.1254 13.3904 15.1746 13.2449C15.2548 13.0076 15.3416 12.8737 15.5152 12.6059L18.5005 8L21.4858 12.6059C21.6594 12.8737 21.7462 13.0076 21.8264 13.2449C21.8755 13.3904 21.9326 13.7443 21.9316 13.8979C21.93 14.1483 21.9137 14.211 21.8809 14.3364Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Matters</span>
-        </a>
-        <a class="modern-nav-item {'active' if view == 'clause_library' else ''}" href="?view=clause_library{session_param}" target="_self">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
-                <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 21.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Clause Library</span>
-        </a>
-        <a class="modern-nav-item {'active' if view == 'organization' else ''}" href="?view=organization{session_param}" target="_self">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
-                <path d="M7.5 11H4.6C4.03995 11 3.75992 11 3.54601 11.109C3.35785 11.2049 3.20487 11.3578 3.10899 11.546C3 11.7599 3 12.0399 3 12.6V21M16.5 11H19.4C19.9601 11 20.2401 11 20.454 11.109C20.6422 11.2049 20.7951 11.3578 20.891 11.546C21 11.7599 21 12.0399 21 12.6V21M16.5 21V6.2C16.5 5.0799 16.5 4.51984 16.282 4.09202C16.0903 3.71569 15.7843 3.40973 15.408 3.21799C14.9802 3 14.4201 3 13.3 3H10.7C9.57989 3 9.01984 3 8.59202 3.21799C8.21569 3.40973 7.90973 3.71569 7.71799 4.09202C7.5 4.51984 7.5 5.0799 7.5 6.2V21M22 21H2M11 7H13M11 11H13M11 15H13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Organization</span>
-            {tier_display}
-        </a>
-        <a class="modern-nav-item {'active' if view == 'pricing' else ''}" href="?view=pricing{session_param}" target="_self">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
-                <path d="M22 8.5H2M2 12.5H5.54668C6.08687 12.5 6.35696 12.5 6.61813 12.5466C6.84995 12.5879 7.0761 12.6563 7.29191 12.7506C7.53504 12.8567 7.75977 13.0065 8.20924 13.3062L8.79076 13.6938C9.24023 13.9935 9.46496 14.1433 9.70809 14.2494C9.9239 14.3437 10.15 14.4121 10.3819 14.4534C10.643 14.5 10.9131 14.5 11.4533 14.5H12.5467C13.0869 14.5 13.357 14.5 13.6181 14.4534C13.85 14.4121 14.0761 14.3437 14.2919 14.2494C14.535 14.1433 14.7598 13.9935 15.2092 13.6938L15.7908 13.3062C16.2402 13.0065 16.465 12.8567 16.7081 12.7506C16.9239 12.6563 17.15 12.5879 17.3819 12.5466C17.643 12.5 17.9131 12.5 18.4533 12.5H22M2 7.2L2 16.8C2 17.9201 2 18.4802 2.21799 18.908C2.40973 19.2843 2.71569 19.5903 3.09202 19.782C3.51984 20 4.07989 20 5.2 20L18.8 20C19.9201 20 20.4802 20 20.908 19.782C21.2843 19.5903 21.5903 19.2843 21.782 18.908C22 18.4802 22 17.9201 22 16.8V7.2C22 6.0799 22 5.51984 21.782 5.09202C21.5903 4.7157 21.2843 4.40974 20.908 4.21799C20.4802 4 19.9201 4 18.8 4L5.2 4C4.0799 4 3.51984 4 3.09202 4.21799C2.7157 4.40973 2.40973 4.71569 2.21799 5.09202C2 5.51984 2 6.07989 2 7.2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>Pricing</span>
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
-    
-
-    # Pinned Footer (no help icon, outside scrollable content)
-    user_email = st.session_state.get("user_email", "User")
-    user_initials = "".join([word[0].upper() for word in user_email.split("@")[0].split(".")[:2]])
-    
-    st.markdown(f"""
-    <!-- Logout button: fixed just above the avatar footer -->
-    <div style="
-        position: fixed;
-        bottom: 65px;
-        left: 0;
-        width: 250px;
-        padding: 0 16px 8px 16px;
-        box-sizing: border-box;
-        z-index: 999;
-    ">
-        <a href="?action=logout{session_param}" target="_self" style="
-            display: block;
-            text-align: center;
-            padding: 8px 0;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
-            color: #9CA3AF;
+        /* Ensure sidebar content is scrollable with space for footer */
+        section[data-testid="stSidebar"] > div {
+            padding-bottom: 80px !important; /* Space for fixed footer */
+        }
+        
+        /* Sidebar footer - absolutely positioned at bottom */
+        .sidebar-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 250px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: #1E1E1E;
+            z-index: 999;
+            box-sizing: border-box;
+        }
+        
+        /* Adjust for expanded sidebar */
+        [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
+            width: 250px;
+        }
+        
+        .sidebar-footer-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .sidebar-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4B9EFF, #2D7DD2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-user-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .sidebar-user-email {
+            color: #FFFFFF;
             font-size: 13px;
             font-weight: 500;
-            text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            transition: background 0.2s, color 0.2s;
-        " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#FFFFFF';"
-           onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='#9CA3AF';"
-        >Logout</a>
-    </div>
+        }
+        
+        /* Modern navigation with pill-shaped active state */
+        .modern-nav {
+            padding: 8px 12px;
+        }
+        
+        .modern-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 12px;
+            min-height: 38px;
+            margin: 4px 0;
+            border-radius: 8px;
+            color: #FFFFFF !important;
+            text-decoration: none !important;
+            font-size: 14px;
+            font-weight: 400;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .modern-nav-item:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: #FFFFFF !important;
+            text-decoration: none !important;
+        }
+        
+        .modern-nav-item.active {
+            background: #252930;
+            color: #FFFFFF !important;
+            font-weight: 500;
+            text-decoration: none !important;
+        }
+        
+        .modern-nav-item span {
+            color: #FFFFFF !important;
+        }
+        
+        .modern-nav-item svg {
+            flex-shrink: 0;
+            opacity: 0.9;
+        }
+        
+        .tier-tag {
+            display: inline-block;
+            margin-left: auto;
+            padding: 2px 8px;
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ADE80;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        
+        /* Slimmer buttons */
+        [data-testid="stSidebar"] button[kind="primary"],
+        [data-testid="stSidebar"] button[kind="secondary"],
+        [data-testid="stSidebar"] .stButton > button {
+            min-height: 32px !important;
+            padding: 6px 12px !important;
+            font-size: 13px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Logo
+        try:
+            import base64
+            import os
+            logo_path = "assets/sidebar_logo.png"
+            if os.path.exists(logo_path):
+                with open(logo_path, "rb") as f:
+                    data = base64.b64encode(f.read()).decode("utf-8")
+                st.markdown(
+                    f"""
+                    <div style="display: flex; justify-content: center; margin: 12px 0;">
+                        <img src="data:image/png;base64,{data}" style="width: 80%; height: auto; border: none; background: transparent;">
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+        except Exception:
+            pass
 
-    <!-- Avatar footer: pinned at the very bottom -->
-    <div class="sidebar-footer" style="padding: 10px 16px;">
-        <div class="sidebar-footer-content">
-            <div class="sidebar-avatar">{user_initials}</div>
-            <div class="sidebar-user-info">
-                <div class="sidebar-user-email">{user_email}</div>
+        # New Matter Button
+        if st.button("New Matter", key="sidebar_new_matter", use_container_width=True, type="primary"):
+            st.session_state["show_new_matter"] = True
+            st.session_state["show_search_modal"] = False
+            st.session_state["show_edit_matter"] = False
+            st.session_state["modal_mode"] = "new_matter"
+            st.session_state["existing_matter_id"] = None
+            st.rerun()
+
+
+        # Search Button (Modal-based)
+        st.markdown('<div style="margin: 0 16px 16px 16px;">', unsafe_allow_html=True)
+        
+        # Initialize search modal state
+        if "show_search_modal" not in st.session_state:
+            st.session_state["show_search_modal"] = False
+        
+        # Get current view for search context
+        view_for_sidebar = get_view()
+        
+        # Search button that opens modal
+        if st.button(
+            f"Search {'clauses' if view_for_sidebar=='clause_library' else 'matters'}",
+            key="search_trigger_btn",
+            use_container_width=True,
+            type="secondary"
+        ):
+            st.session_state["show_search_modal"] = True
+            st.session_state["show_new_matter"] = False
+            st.session_state["show_edit_matter"] = False
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Get session param helper
+        def get_session_param_sidebar():
+            """Get session parameter for URLs."""
+            session_cookie = st.session_state.get("session_cookie", "")
+            if session_cookie:
+                return f"&session={session_cookie}"
+            return ""
+
+        session_param_sidebar = get_session_param_sidebar()
+        
+        # Get subscription info for tier tag
+        user_id_sidebar = st.session_state.get("user_id")
+        tier_display = ""
+        if user_id_sidebar:
+            status = subscription_mgr.get_user_status(user_id_sidebar)
+            tier = status.get("tier", "trial")
+            documents_remaining = status.get("documents_remaining")
+            
+            # Determine tier display
+            if tier == "enterprise":
+                tier_display = '<span class="tier-tag">Unlimited</span>'
+            elif tier == "team":
+                tier_display = '<span class="tier-tag">Team</span>'
+            elif tier == "individual":
+                tier_display = f'<span class="tier-tag">{documents_remaining or 0} docs</span>'
+            elif tier == "trial":
+                tier_display = '<span class="tier-tag" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B;">Trial</span>'
+    
+        # Modern Navigation with icons
+        st.markdown(f"""
+        <div class="modern-nav">
+            <a class="modern-nav-item {'active' if view_for_sidebar in ['matters', 'matter_details'] else ''}" href="?view=matters{session_param_sidebar}" target="_self">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                    <path d="M2.50047 13H8.50047M15.5005 13H21.5005M12.0005 7V21M12.0005 7C13.3812 7 14.5005 5.88071 14.5005 4.5M12.0005 7C10.6198 7 9.50047 5.88071 9.50047 4.5M4.00047 21L20.0005 21M4.00047 4.50001L9.50047 4.5M9.50047 4.5C9.50047 3.11929 10.6198 2 12.0005 2C13.3812 2 14.5005 3.11929 14.5005 4.5M14.5005 4.5L20.0005 4.5M8.88091 14.3364C8.48022 15.8706 7.11858 17 5.50047 17C3.88237 17 2.52073 15.8706 2.12004 14.3364C2.0873 14.211 2.07093 14.1483 2.06935 13.8979C2.06838 13.7443 2.12544 13.3904 2.17459 13.2449C2.25478 13.0076 2.34158 12.8737 2.51519 12.6059L5.50047 8L8.48576 12.6059C8.65937 12.8737 8.74617 13.0076 8.82636 13.2449C8.87551 13.3904 8.93257 13.7443 8.9316 13.8979C8.93002 14.1483 8.91365 14.211 8.88091 14.3364ZM21.8809 14.3364C21.4802 15.8706 20.1186 17 18.5005 17C16.8824 17 15.5207 15.8706 15.12 14.3364C15.0873 14.211 15.0709 14.1483 15.0693 13.8979C15.0684 13.7443 15.1254 13.3904 15.1746 13.2449C15.2548 13.0076 15.3416 12.8737 15.5152 12.6059L18.5005 8L21.4858 12.6059C21.6594 12.8737 21.7462 13.0076 21.8264 13.2449C21.8755 13.3904 21.8755 13.3904 21.9326 13.7443 21.9316 13.8979C21.93 14.1483 21.9137 14.211 21.8809 14.3364Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Matters</span>
+            </a>
+            <a class="modern-nav-item {'active' if view_for_sidebar == 'clause_library' else ''}" href="?view=clause_library{session_param_sidebar}" target="_self">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                    <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 16.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Clause Library</span>
+            </a>
+            <a class="modern-nav-item {'active' if view_for_sidebar == 'organization' else ''}" href="?view=organization{session_param_sidebar}" target="_self">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                    <path d="M7.5 11H4.6C4.03995 11 3.75992 11 3.54601 11.109C3.35785 11.2049 3.20487 11.3578 3.10899 11.546C3 11.7599 3 12.0399 3 12.6V21M16.5 11H19.4C19.9601 11 20.2401 11 20.454 11.109C20.6422 11.2049 20.7951 11.3578 20.891 11.546C21 11.7599 21 12.0399 21 12.6V21M16.5 21V6.2C16.5 5.0799 16.5 4.51984 16.282 4.09202C16.0903 3.71569 15.7843 3.40973 15.408 3.21799C14.9802 3 14.4201 3 13.3 3H10.7C9.57989 3 9.01984 3 8.59202 3.21799C8.21569 3.40973 7.90973 3.71569 7.71799 4.09202C7.5 4.51984 7.5 5.0799 7.5 6.2V21M22 21H2M11 7H13M11 11H13M11 15H13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Organization</span>
+                {tier_display}
+            </a>
+            <a class="modern-nav-item {'active' if view_for_sidebar == 'pricing' else ''}" href="?view=pricing{session_param_sidebar}" target="_self">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:#fff">
+                    <path d="M22 8.5H2M2 12.5H5.54668C6.08687 12.5 6.35696 12.5 6.61813 12.5466C6.84995 12.5879 7.0761 12.6563 7.29191 12.7506C7.53504 12.8567 7.75977 13.0065 8.20924 13.3062L8.79076 13.6938C9.24023 13.9935 9.46496 14.1433 9.70809 14.2494C9.9239 14.3437 10.15 14.4121 10.3819 14.4534C10.643 14.5 10.9131 14.5 11.4533 14.5H12.5467C13.0869 14.5 13.357 14.5 13.6181 14.4534C13.85 14.4121 14.0761 14.3437 14.2919 14.2494C14.535 14.1433 14.7598 13.9935 15.2092 13.6938L15.7908 13.3062C16.2402 13.0065 16.465 12.8567 16.7081 12.7506C16.9239 12.6563 17.15 12.5879 17.3819 12.5466C17.643 12.5 17.9131 12.5 18.4533 12.5H22M2 7.2L2 16.8C2 17.9201 2 18.4802 2.21799 18.908C2.40973 19.2843 2.71569 19.5903 3.09202 19.782C3.51984 20 4.07989 20 5.2 20L18.8 20C19.9201 20 20.4802 20 20.908 19.782C21.2843 19.5903 21.5903 19.2843 21.782 18.908C22 18.4802 22 17.9201 22 16.8V7.2C22 6.0799 22 5.51984 21.782 5.09202C21.5903 4.7157 21.2843 4.40974 20.908 4.21799C20.4802 4 19.9201 4 18.8 4L5.2 4C4.0799 4 3.51984 4 3.09202 4.21799C2.7157 4.40973 2.40973 4.71569 2.21799 5.09202C2 5.51984 2 6.07989 2 7.2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Pricing</span>
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+        
+
+        # Pinned Footer (no help icon, outside scrollable content)
+        user_email = st.session_state.get("user_email", "User")
+        user_initials = "".join([word[0].upper() for word in user_email.split("@")[0].split(".")[:2]])
+        
+        st.markdown(f"""
+        <!-- Logout button: fixed just above the avatar footer -->
+        <div style="
+            position: fixed;
+            bottom: 65px;
+            left: 0;
+            width: 250px;
+            padding: 0 16px 8px 16px;
+            box-sizing: border-box;
+            z-index: 999;
+        ">
+            <a href="?action=logout{session_param_sidebar}" target="_self" style="
+                display: block;
+                text-align: center;
+                padding: 8px 0;
+                background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                color: #9CA3AF;
+                font-size: 13px;
+                font-weight: 500;
+                text-decoration: none;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                transition: background 0.2s, color 0.2s;
+            " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#FFFFFF';"
+               onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='#9CA3AF';"
+            >Logout</a>
+        </div>
+
+        <!-- Avatar footer: pinned at the very bottom -->
+        <div class="sidebar-footer" style="padding: 10px 16px;">
+            <div class="sidebar-footer-content">
+                <div class="sidebar-avatar">{user_initials}</div>
+                <div class="sidebar-user-info">
+                    <div class="sidebar-user-email">{user_email}</div>
+                </div>
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 
 
@@ -584,6 +703,15 @@ def render_matters():
         return ""
     
     session_param = get_session_param()
+    
+    # ── INITIALIZE FILTERS FROM URL OR SESSION ──────────────────────────────
+    # This ensures filters persist across reloads and sharing.
+    if "filter_status" not in st.session_state:
+        st.session_state["filter_status"] = st.query_params.get("filter_status", "all")
+    if "filter_matter_type" not in st.session_state:
+        st.session_state["filter_matter_type"] = st.query_params.get("filter_matter_type", "all")
+    if "filter_jurisdiction" not in st.session_state:
+        st.session_state["filter_jurisdiction"] = st.query_params.get("filter_jurisdiction", "all")
     
     # Create header with filter button on the right
     col_title, col_filter = st.columns([4, 1])
@@ -675,7 +803,13 @@ def render_matters():
                     st.session_state["filter_status"] = status_filter
                     st.session_state["filter_matter_type"] = matter_type_filter
                     st.session_state["filter_jurisdiction"] = jurisdiction_filter
-                    update_query_params(st.query_params.to_dict())
+                    
+                    # Update URL for persistence
+                    new_params = st.query_params.to_dict()
+                    new_params["filter_status"] = status_filter
+                    new_params["filter_matter_type"] = matter_type_filter
+                    new_params["filter_jurisdiction"] = jurisdiction_filter
+                    update_query_params(new_params)
                     st.rerun()
             
             with col2:
@@ -683,6 +817,12 @@ def render_matters():
                     st.session_state["filter_status"] = "all"
                     st.session_state["filter_matter_type"] = "all"
                     st.session_state["filter_jurisdiction"] = "all"
+                    
+                    # Clear filters from URL
+                    new_params = st.query_params.to_dict()
+                    for k in ["filter_status", "filter_matter_type", "filter_jurisdiction"]:
+                        new_params.pop(k, None)
+                    update_query_params(new_params)
                     st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -839,7 +979,9 @@ def get_time_ago(dt):
 # ============================================================================
 # ROUTING
 # ============================================================================
-if view == "matters":
+if view == "generation_focus":
+    render_document_editor()
+elif view == "matters":
     render_matters()
 elif view == "clause_library":
     render_clause_library()
@@ -867,9 +1009,11 @@ else:
 # ============================================================================
 # SEARCH MODAL - Render if search is triggered
 # ============================================================================
-render_search_modal(db, view)
+if view != "generation_focus":
+    render_search_modal(db, view)
 
 # ============================================================================
 # MODAL - ALWAYS RENDER AT THE END
 # ============================================================================
-render_new_matter_modal()
+if view != "generation_focus":
+    render_new_matter_modal()

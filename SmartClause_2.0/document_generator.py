@@ -18,14 +18,17 @@ ABSOLUTE OUTPUT RULES
 ════════════════════════════
 1. OUTPUT ONLY the complete document HTML + disclaimer block. Zero preamble, commentary, or meta-text.
    NEVER wrap output in markdown code fences. Do NOT start with ```html or ``` or any backtick sequence.    The very first character of your response must be < (the opening of an HTML tag).
-2. NEVER truncate, summarise, or use placeholders like "(clause continues…)". Every clause must be fully written out.
-   NEVER stop mid-clause, mid-sentence, or mid-paragraph. If you are approaching a token limit, compress whitespace
-   rather than cutting content — but never omit any clause, sub-clause, execution block, or the disclaimer.
-3. DOCUMENT COMPLETION IS MANDATORY: every document must end with:
+2. NEVER truncate, summarise, bullet-point, or use placeholders like "(clause continues…)".
+   Every clause must be written out in full grammatical prose sentences — no fragments, no lists as substitutes for prose.
+   NEVER stop mid-clause, mid-sentence, or mid-paragraph.
+   If approaching a token limit: stop at the end of the current clause (never mid-sentence) so continuation can resume cleanly.
+3. DOCUMENT COMPLETION IS MANDATORY. Every document must end with:
    (a) a fully written execution/signature block (or sworn block for affidavits), AND
    (b) the legal disclaimer paragraph.
-   If you cannot fit the full document in one response, write as much as possible and end at a clean clause boundary
-   so that a continuation can resume seamlessly. Never end inside a sentence.
+   If the full document cannot fit in one response, end at a clean clause boundary so continuation can resume.
+4. CONTRACTS — PER-CLAUSE WORD BUDGETS ARE MANDATORY. You must reach the word target for each clause
+   before proceeding to the next. Write more sentences, add more sub-clauses, expand procedural detail —
+   but every word must be legally meaningful. Padding is not permitted; substance is required.
 3. MINIMUM WORD COUNTS are floors, not targets. Exceed them whenever substance demands it.
 4. Every sentence must be legally meaningful — no filler padding.
 
@@ -184,236 +187,250 @@ TAX PROVISIONS (all agreements):
 # BLUEPRINT: AGREEMENTS / CONTRACTS
 # ══════════════════════════════════════════════════════════════════
 BLUEPRINT_CONTRACTS = """
-════════════════════════════
-CONTRACT BLUEPRINT — MINIMUM 3,000 WORDS (HARD FLOOR)
-WORD COUNT RULE: The complete generated contract MUST contain at least 3,000 words of substantive legal text.
-Count before finalising. If below 3,000 words, expand clauses — add more sub-provisions, recitals, obligations, and definitions until the floor is met. Never truncate or summarise clauses to save space.
-════════════════════════════
+════════════════════════════════════════════════════════════════
+CONTRACT DRAFTING RULES — READ BEFORE WRITING A SINGLE WORD
+════════════════════════════════════════════════════════════════
+
+HARD WORD COUNT REQUIREMENT:
+  The finished contract MUST contain a MINIMUM of 3,000 words of substantive legal prose.
+  HTML tags, attribute text, and whitespace do NOT count toward this total.
+  
+  MANDATORY CLAUSE BUDGETS — you must meet EVERY one of these before closing the document:
+    Header + Parties block + Recitals:   ≥ 350 words
+    Clause 1  Definitions & Interpretation: ≥ 550 words  (at least 20 defined terms, each fully explained)
+    Clause 2  Subject Matter / Scope:       ≥ 450 words  (detailed, transaction-specific)
+    Clause 3  Term & Commencement:          ≥ 200 words
+    Clause 4  Consideration & Payment:      ≥ 350 words
+    Clause 5  Obligations of Parties:       ≥ 450 words  (at least 8 sub-clauses per party)
+    Clause 6  Representations & Warranties: ≥ 300 words
+    Clause 7  Indemnities:                  ≥ 200 words
+    Clause 8  Confidentiality & Data Prot.: ≥ 250 words
+    Clause 9  Intellectual Property:        ≥ 150 words
+    Clause 10 Insurance:                    ≥ 150 words
+    Clause 11 Limitation of Liability:      ≥ 180 words
+    Clause 12 Force Majeure:                ≥ 150 words
+    Clause 13 Termination:                  ≥ 280 words
+    Clause 14 Dispute Resolution:           ≥ 220 words
+    Clause 15 General Provisions:           ≥ 300 words
+    Execution Block:                        ≥ 80 words
+
+  RUNNING TOTAL CHECK: After each clause, mentally tally words written so far.
+  If you are behind budget at any clause, expand that clause before proceeding.
+  DO NOT move to the next clause until the current clause meets its word budget.
+  NEVER summarise, bullet-point, or compress a clause to save space.
+  Write full, grammatically complete sentences for every provision.
+
+════════════════════════════════════════════════════════════════
+DOCUMENT STRUCTURE
+════════════════════════════════════════════════════════════════
 
 DOCUMENT HEADER:
-- Title: "[TYPE OF AGREEMENT]" — centred, bold, underlined, ALL CAPS
-- Date line: "This [Type of Agreement] ("Agreement") is made and entered into as of this ___<sup>th</sup> day of _____________ 20_____"
-- Parties block: "BETWEEN:" followed by full party descriptions with all mandatory Kenya fields (see Kenya Compliance above)
-- Collective definition: "CSKSL and Client are hereinafter jointly referred to as the "Parties" and each individually as a "Party"."
+  <h2 class="doc-title" style="text-align:center; text-decoration:underline;">[AGREEMENT TYPE IN CAPS]</h2>
+  <p style="text-align:center;">This [Agreement Type] (the <strong>"Agreement"</strong>) is made and entered into as of this ___<sup>th</sup> day of _____________ 20_____</p>
+  <p><strong>BETWEEN:</strong></p>
+  [Full party block for Party 1 — name, registration/ID, KRA PIN, physical address, P.O. Box, town, hereinafter definition]
+  <p style="text-align:center;"><strong>AND</strong></p>
+  [Full party block for Party 2]
+  <p>[Party 1 short name] and [Party 2 short name] are hereinafter jointly referred to as the <strong>"Parties"</strong> and each individually as a <strong>"Party"</strong>.</p>
 
-**RECITALS** (300+ words)
-WHEREAS recitals (numbered by alphabet A, B, C… or as "WHEREAS"):
-A. Business background and nature of each party
-B. Commercial purpose and context of this transaction
-C. Market/regulatory context and applicable licences
-D. Board/member resolutions authorising execution (for companies: cite Companies Act 2015 s.128 board resolutions)
-E. Prior dealings or relationship (if any)
-F. Intention and consideration
-Close: "NOW, THEREFORE, in consideration of the mutual covenants, representations, warranties, and agreements contained herein, and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the Parties agree as follows:"
+RECITALS (≥ 350 words total including header):
+  Write 5–7 WHEREAS recitals, each 2–4 full sentences long:
+  A. Describe Party 1's business, registration, regulatory standing, and expertise in detail
+  B. Describe Party 2's business, needs, and why it is engaging Party 1
+  C. Describe the commercial context, market conditions, and regulatory framework governing this transaction
+  D. State that all necessary corporate or personal authorisations have been obtained (cite Companies Act 2015 s.128 for companies)
+  E. Describe any prior relationship or dealings between the parties
+  F. State the commercial purpose of this Agreement and the mutual benefit each party derives
+  G. State the consideration and the parties' intention to be legally bound
+  Close with the full NOW THEREFORE paragraph.
 
-**1. DEFINITIONS AND INTERPRETATION** (600+ words)
-1.1 Definitions (alphabetical, 25–40 defined terms):
-  Include: Agreement, Applicable Law, Business Day, Commencement Date, Confidential Information, Dispute, Effective Date, Force Majeure Event, Intellectual Property Rights, KRA PIN, Parties/Party, Services/Goods (as applicable), Term, Territory, VAT, and all transaction-specific terms.
-1.2 Interpretation:
-  (a) Singular includes plural and vice versa; any gender includes all genders
-  (b) Headings are for convenience only and do not affect interpretation
-  (c) References to statutes include amendments, re-enactments, and subsidiary legislation made thereunder
-  (d) "Include" and "including" are not words of limitation
-  (e) Time is of the essence in this Agreement
-  (f) References to "days" mean calendar days unless stated to be Business Days
-  (g) References to "writing" include electronic communications where legally permissible under the Kenya Information and Communications Act (Cap. 411A)
-  (h) References to clauses, schedules, and annexures are to this Agreement unless otherwise stated
-  (i) Where a period of time falls on a weekend or public holiday, it extends to the next Business Day
+CLAUSE 1 — DEFINITIONS AND INTERPRETATION (≥ 550 words)
+  1.1 Definitions — write out each definition in a full sentence (not a fragment). Minimum 20 terms, alphabetical order.
+      Required terms: "Agreement", "Applicable Law", "Business Day", "Commencement Date", "Confidential Information",
+      "Data Subject", "Dispute", "Effective Date", "Force Majeure Event", "Intellectual Property Rights", "KRA PIN",
+      "Material Breach", "Party/Parties", "Personal Data", "Services" (or "Goods"), "Term", "Territory", "VAT",
+      plus all terms specific to this transaction type.
+      Each definition must be a complete sentence of at least 15 words explaining the term's full meaning and scope.
+  1.2 Interpretation — write out each rule as a full sentence:
+      (a) Words importing the singular include the plural and vice versa, and words importing any gender include all other genders.
+      (b) References to persons include bodies corporate, unincorporated associations, partnerships, and individuals.
+      (c) Clause headings are inserted for convenience of reference only and shall not affect the construction of this Agreement.
+      (d) References to any statute or statutory provision include all subordinate legislation made under it and any amendment, re-enactment, or consolidation of it for the time being in force.
+      (e) The words "include", "includes", and "including" shall be construed as if followed by the words "without limitation".
+      (f) Time is of the essence of this Agreement in respect of all dates and periods.
+      (g) References to "days" mean calendar days unless the context expressly requires Business Days.
+      (h) References to "writing" and "written" include any communication transmitted electronically where receipt is capable of being verified, in accordance with the Kenya Information and Communications Act (Cap. 411A) and the Business Laws (Amendment) Act 2020.
+      (i) Where any period expires on a Saturday, Sunday, or public holiday in Kenya, it shall be extended to the next Business Day.
+      (j) References to Clauses, Schedules, and Annexures are to this Agreement unless otherwise specified.
 
-**2. SUBJECT MATTER / SCOPE** (700+ words — customise by transaction type)
-SERVICE AGREEMENTS:
-  2.1 Appointment and engagement — scope of services
-  2.2 Service specifications and deliverables
-  2.3 Service levels and KPIs
-  2.4 Methodology and resources
-  2.5 Variations to scope (written agreement required)
-  2.6 Client cooperation obligations
-  2.7 Third-party sub-contractors (consent, responsibility)
-SALE OF GOODS:
-  2.1 Goods description (quantity, specification, quality standard, KEBS certification if applicable)
-  2.2 Delivery terms (Incoterms if international; otherwise specify FOB/CIF/DDP equivalent)
-  2.3 Risk of loss / title transfer
-  2.4 Inspection and acceptance
-  2.5 Rejection procedure
-LEASE:
-  2.1 Premises description (LR Number, physical description, acreage/floor area)
-  2.2 Permitted use (exclusive use provision)
-  2.3 Condition of premises at commencement
-  2.4 Fixtures, fittings, and alterations
-  2.5 Landlord and Tenant (Shops, Hotels and Catering Establishments) Act (Cap. 301) applicability notice
+CLAUSE 2 — SUBJECT MATTER / SCOPE (≥ 450 words — write all sub-clauses applicable to transaction type below)
+  SERVICE AGREEMENTS — write out in full prose:
+    2.1 Appointment: state that Party 1 is appointed to provide the Services on the terms of this Agreement; describe the commercial relationship.
+    2.2 Service Specifications: describe in detail what is to be done, how, where, to what standard, and by when.
+    2.3 Service Levels and KPIs: write out specific measurable standards (response times, uptime, quality metrics).
+    2.4 Methodology and Staffing: describe the approach, key personnel, qualifications, and resources to be deployed.
+    2.5 Variations: state the written variation procedure in full — who may request, how assessed, written confirmation required.
+    2.6 Client Cooperation: enumerate at least 6 specific things the client must do to enable performance.
+    2.7 Sub-contracting: state consent requirements, conditions, and retained responsibility of primary party.
+  SALE OF GOODS — write out in full prose:
+    2.1 Goods: describe in full — type, specification, quantity, quality standards, KEBS certification where applicable.
+    2.2 Delivery: state full delivery terms including location, method, timing, and Incoterms equivalent.
+    2.3 Risk and Title: state exactly when risk passes and when title passes, and any conditions precedent to title passing.
+    2.4 Inspection: describe inspection window, process, and acceptance criteria in full.
+    2.5 Rejection: describe rejection procedure, timeline, and consequences in full.
+  MOTOR VEHICLE SALE — write out in full prose:
+    2.1 Vehicle identification: registration number, chassis number, engine number, make, model, year, colour — all mandatory.
+    2.2 Logbook status and HP clearance confirmation.
+    2.3 Condition and warranty of ownership.
+    2.4 NTSA transfer obligations (Form M1) and timeline.
+  LEASE — write out in full prose:
+    2.1 Premises: LR/Title Number, physical description, floor area in sq metres, building name, County.
+    2.2 Permitted use: state the specific permitted use and prohibition on change without written consent.
+    2.3 Condition: describe condition at commencement; reference schedule of condition.
+    2.4 Fixtures and alterations: state what is included and the process for alterations.
 
-**3. TERM AND COMMENCEMENT** (300+ words)
-  3.1 Commencement Date
-  3.2 Initial Term (duration in years/months)
-  3.3 Renewal — automatic renewal conditions, notice period (minimum 3 months prior to expiry)
-  3.4 Milestones and key dates (if applicable, schedule reference)
-  3.5 Effect of holdover (where party continues after expiry before renewal confirmed)
+CLAUSE 3 — TERM AND COMMENCEMENT (≥ 200 words)
+  3.1 State the Commencement Date and how it is determined.
+  3.2 State the Initial Term in full — years and months.
+  3.3 Renewal: write out the automatic renewal mechanism, the notice period required to prevent renewal (minimum 3 months), and the effect of renewal on all terms.
+  3.4 Milestones: list any key dates or milestones with consequences for missing them.
+  3.5 Holdover: describe what happens if a party continues to perform after expiry without executing a renewal.
 
-**4. CONSIDERATION, FEES AND PAYMENT** (500+ words)
-  4.1 Fees/Price — state KES amount in figures and words; VAT treatment explicit (inclusive or exclusive)
-  4.2 Payment schedule — table format: Milestone/Date | Amount (KES excl. VAT) | VAT @ 16% | Total
-  4.3 Payment method (bank transfer — include full bank account details or reference to Schedule)
-  4.4 Invoicing: EFD-compliant invoices per KRA requirements; required supporting documents
-  4.5 Due date for payment (specific date formula)
-  4.6 Late payment: interest at 2% above CBK reference rate per month, compounded monthly, from due date to actual payment date
-  4.7 Disputed invoices: notification within [X] Business Days; undisputed portion immediately payable; dispute resolution per Clause [X]
-  4.8 Withholding tax: receiving party confirms KRA PIN; paying party to issue withholding tax certificate within 30 days of deduction
-  4.9 Currency: all payments in Kenya Shillings; if foreign currency, specify conversion mechanism (CBK mid-rate on due date)
-  4.10 Set-off: each party's right to set off undisputed amounts
-  4.11 VAT clause: if any supply becomes subject to VAT or rate changes, price adjusted accordingly
+CLAUSE 4 — CONSIDERATION, FEES AND PAYMENT (≥ 350 words)
+  4.1 State the fee/price in KES in both figures and words; state explicitly whether amounts are VAT-inclusive or VAT-exclusive.
+  4.2 Payment schedule: render as an HTML table — columns: Milestone/Period | Amount KES (excl. VAT) | VAT @ 16% | Total KES.
+  4.3 Payment method: state full bank account details or refer to Schedule; confirm only bank transfer accepted.
+  4.4 Invoicing: state EFD-compliance requirement; list supporting documents required with each invoice.
+  4.5 Due date: state the exact due date formula (e.g., 30th day of month following service delivery).
+  4.6 Late payment: state the interest rate formula (2% above CBK reference rate per month, compounded monthly), accrual start date, and that interest is in addition to the principal.
+  4.7 Disputed invoices: state the dispute notification period, that the undisputed portion is immediately payable, and the dispute resolution path.
+  4.8 Withholding tax: state the applicable WHT rate, confirm KRA PINs of both parties, and the 30-day certificate obligation.
+  4.9 Currency: state that all payments are in Kenya Shillings; if foreign currency involved, state the CBK mid-rate conversion mechanism.
+  4.10 VAT adjustment: state that if VAT rate changes, the price adjusts accordingly and neither party may use rate change as a reason to terminate.
 
-**5. OBLIGATIONS OF THE PARTIES** (900+ words)
-  5.1 Obligations of [Party A] — detailed, specific to transaction type (minimum 10 sub-clauses)
-  5.2 Obligations of [Party B] — detailed, specific to transaction type (minimum 10 sub-clauses)
-  5.3 Standard of care: each party shall perform obligations with the degree of skill, care, and diligence of a competent professional in the relevant field
-  5.4 Compliance with Applicable Law: both parties to comply with all laws, regulations, and licences applicable to their respective activities
+CLAUSE 5 — OBLIGATIONS OF THE PARTIES (≥ 450 words)
+  5.1 Obligations of [Party 1] — write out AT LEAST 8 specific, detailed obligations in full prose sentences.
+      Each obligation must be concrete and measurable, not generic. Examples: delivery timelines, reporting requirements,
+      staffing minimums, quality standards, compliance certifications, notification duties, record-keeping obligations.
+  5.2 Obligations of [Party 2] — write out AT LEAST 8 specific, detailed obligations in full prose sentences.
+      Each obligation must be concrete. Examples: payment timelines, information provision, access, cooperation,
+      approvals required, insurance maintenance, regulatory compliance on their side.
+  5.3 Standard of care: state that each party shall perform its obligations with the degree of skill, care, and diligence
+      expected of a competent professional with experience in the relevant field or industry in Kenya.
+  5.4 Regulatory compliance: state that each party is responsible for obtaining and maintaining all licences, permits,
+      and approvals required for it to fulfil its obligations under this Agreement.
 
-**6. REPRESENTATIONS AND WARRANTIES** (500+ words)
-  6.1 Mutual representations:
-    (a) Each party is duly incorporated/constituted and has full legal capacity to enter this Agreement
-    (b) Execution has been duly authorised (for companies: board resolution per Companies Act 2015 s.128)
-    (c) This Agreement constitutes a valid, binding, and enforceable obligation
-    (d) Execution and performance do not violate any applicable law, regulation, court order, or existing agreement
-    (e) No litigation, arbitration, or administrative proceedings pending or threatened that would materially affect ability to perform
-    (f) No insolvency or winding-up proceedings commenced or threatened
-  6.2 Specific warranties by [Seller/Service Provider]:
-    (customise to transaction — e.g., title warranty, fitness for purpose, regulatory approvals, no encumbrances)
-  6.3 Warranty survival: representations and warranties survive execution and remain in force for [X] years unless otherwise specified
+CLAUSE 6 — REPRESENTATIONS AND WARRANTIES (≥ 300 words)
+  6.1 Mutual representations — write each of the following in a full sentence:
+      (a) Legal capacity and due incorporation/constitution.
+      (b) Due authorisation — board resolution for companies per Companies Act 2015 s.128.
+      (c) This Agreement constitutes a valid, binding, and enforceable obligation.
+      (d) No conflict with any law, regulation, court order, or existing agreement.
+      (e) No pending or threatened litigation that would materially affect performance.
+      (f) No insolvency, bankruptcy, receivership, or winding-up commenced or threatened.
+      (g) All information provided to the other party is accurate, complete, and not misleading.
+  6.2 Specific warranties — write out warranties specific to the transaction type in full sentences (minimum 3).
+  6.3 Warranty survival: state the period for which warranties survive execution (minimum 2 years).
 
-**7. INDEMNITIES** (350+ words)
-  7.1 Indemnity by [Party A]: shall indemnify, defend, and hold harmless [Party B] from all claims, losses, liabilities, costs, and expenses (including Advocates' fees on a solicitor-client basis) arising from:
-    (a) Breach of any representation, warranty, or obligation under this Agreement
-    (b) Negligence or wilful misconduct of the indemnifying party
-    (c) Infringement of any third-party intellectual property rights
-    (d) Violation of Applicable Law
-  7.2 Indemnity by [Party B]: reciprocal on same terms
-  7.3 Indemnification procedure:
-    (a) Prompt written notice of claim
-    (b) Indemnifying party has right to assume defence (with qualified Advocate)
-    (c) Indemnified party to cooperate and not settle without consent
-  7.4 Limitation: indemnity does not extend to indirect or consequential losses unless caused by gross negligence or fraud
+CLAUSE 7 — INDEMNITIES (≥ 200 words)
+  7.1 Each party's indemnity — write each trigger in a full sentence: breach of warranty, negligence, wilful misconduct, IP infringement, violation of Applicable Law.
+  7.2 Indemnification procedure — write out: notice requirement, right to control defence, duty to cooperate, restriction on settlement.
+  7.3 Exclusion: state that indemnity does not extend to indirect or consequential losses unless caused by fraud or gross negligence.
 
-**8. CONFIDENTIALITY AND DATA PROTECTION** (400+ words)
-  8.1 Definition of Confidential Information (broad; includes Personal Data, trade secrets, financial information, client data, this Agreement)
-  8.2 Obligations: each party shall maintain strict confidence; use only for purposes of this Agreement; not disclose to third parties without prior written consent
-  8.3 Permitted disclosures: (a) professional advisors bound by equivalent confidentiality; (b) required by law, court order, or regulatory authority (with prior notice where lawful)
-  8.4 Exceptions: publicly available information (not through breach); independently developed; rightfully received from third party
-  8.5 Duration: confidentiality obligations survive termination for [5] years
-  8.6 Data Protection — Data Protection Act 2019 (No. 24 of 2019):
-    (a) Each party is a data controller/processor in respect of Personal Data it collects
-    (b) Processing of Personal Data shall be lawful, fair, and transparent
-    (c) Appropriate technical and organisational measures implemented to prevent unauthorised access, loss, or destruction
-    (d) Data subjects' rights honoured: access, rectification, erasure, portability (Data Protection Act 2019 Part IV)
-    (e) Data breaches reported to the Office of the Data Protection Commissioner within 72 hours
-    (f) Data sharing agreement executed where either party is a data processor for the other
+CLAUSE 8 — CONFIDENTIALITY AND DATA PROTECTION (≥ 250 words)
+  8.1 Definition of Confidential Information — write a full, broad definition.
+  8.2 Obligations — write out each obligation in full: maintain confidence, use only for Agreement purposes, no disclosure without consent.
+  8.3 Permitted disclosures — write out each exception fully: professional advisors, legal requirement, regulatory authority.
+  8.4 Exceptions — write out in full: publicly available (not through breach), independently developed, rightfully received from third party.
+  8.5 Duration: state survival period (5 years post-termination).
+  8.6 Data Protection Act 2019 obligations — write out: lawful basis, data subject rights, security measures, breach notification to Office of Data Protection Commissioner within 72 hours.
 
-**9. INTELLECTUAL PROPERTY** (300+ words)
-  9.1 Pre-existing IP: each party retains ownership of its own IP
-  9.2 New IP created under this Agreement: specify ownership (party who creates / joint / client owns work product)
-  9.3 Licence grants (scope, territory, duration, exclusivity, sub-licensing)
-  9.4 IP infringement: notification procedure; indemnity
-  9.5 Moral rights waiver (where applicable under Copyright Act, Cap. 130)
+CLAUSE 9 — INTELLECTUAL PROPERTY (≥ 150 words)
+  9.1 State that each party retains all right, title, and interest in its pre-existing IP.
+  9.2 State ownership of newly created IP; specify if work-for-hire, joint, or client-owned.
+  9.3 Write out licence grants in full: scope, territory, duration, exclusivity, sub-licensing rights.
+  9.4 State IP infringement notification and indemnity procedure.
 
-**10. INSURANCE** (250+ words)
-  10.1 Each party shall maintain adequate insurance throughout the Term:
-    (a) Public liability insurance
-    (b) Professional indemnity insurance (service providers)
-    (c) Property/goods insurance (as applicable)
-    (d) Employer's liability insurance (Employment Act 2007; Work Injury Benefits Act 2007)
-  10.2 Minimum coverage amounts: [KES AMOUNTS]
-  10.3 Policies with reputable licensed insurers (Insurance Regulatory Authority registered)
-  10.4 Evidence of insurance (certificates) to be provided within 14 days of Commencement Date and annually thereafter
-  10.5 Neither party to do anything to invalidate the other's insurance
+CLAUSE 10 — INSURANCE (≥ 150 words)
+  10.1 State each required policy type, minimum coverage amount in KES, and the insurer requirement (IRA-licensed).
+  10.2 State the certificate of insurance delivery obligation (14 days from Commencement Date and annually).
+  10.3 State that each party must not act in any way that invalidates the other's insurance.
 
-**11. LIMITATION OF LIABILITY** (300+ words)
-  11.1 Neither party liable for indirect, incidental, special, exemplary, or consequential damages (including loss of profit, loss of revenue, loss of data, business interruption) even if advised of possibility
-  11.2 Cap on direct liability: aggregate liability of each party shall not exceed [the greater of KES [AMOUNT] or the total fees paid/payable under this Agreement in the 12 months preceding the claim]
-  11.3 Exceptions (liability cap and consequential loss exclusion do not apply to):
-    (a) Death or personal injury caused by negligence
-    (b) Fraud or fraudulent misrepresentation
-    (c) Wilful misconduct or gross negligence
-    (d) Breach of confidentiality or data protection obligations
-    (e) IP infringement
-  11.4 Duty to mitigate: each party must take reasonable steps to mitigate any loss
+CLAUSE 11 — LIMITATION OF LIABILITY (≥ 180 words)
+  11.1 State the exclusion of indirect, incidental, consequential, and exemplary damages in full.
+  11.2 State the aggregate liability cap in full — KES amount or fee-based formula.
+  11.3 Write out each exception to the cap in a full sentence: death/personal injury from negligence, fraud, wilful misconduct, gross negligence, confidentiality breach, IP infringement.
+  11.4 State the duty to mitigate in full.
 
-**12. FORCE MAJEURE** (250+ words)
-  12.1 Definition: any event beyond reasonable control of affected party, including: acts of God, war, terrorism, civil unrest, epidemic, pandemic, government directive, fire, flood, earthquake, industrial action, failure of public utilities, interruption of transport
-  12.2 Effect: affected party's obligations suspended for duration of Force Majeure Event (payment obligations not excused)
-  12.3 Notice: affected party to notify the other within 48 hours of onset; updates every 7 days
-  12.4 Mitigation: affected party to use reasonable endeavours to resume performance
-  12.5 Prolonged Force Majeure (exceeding 90 days): either party may terminate on 30 days written notice with no liability for losses caused solely by Force Majeure Event
+CLAUSE 12 — FORCE MAJEURE (≥ 150 words)
+  12.1 Write out the full definition of Force Majeure Event with at least 8 examples.
+  12.2 State the effect on obligations in full — which are suspended, which are not (payment obligations not excused).
+  12.3 State the notification obligation — 48 hours, written, with updates every 7 days.
+  12.4 State the mitigation duty in full.
+  12.5 State the prolonged Force Majeure termination right (90 days, 30 days notice, no liability).
 
-**13. TERMINATION** (500+ words)
-  13.1 Termination for convenience: either party may terminate on [90] days written notice
-  13.2 Termination for cause — immediate termination on written notice:
-    (a) Material breach not remedied within 30 days of written notice
-    (b) Insolvency, bankruptcy, receivership, or winding-up of either party (Companies Act 2015; Insolvency Act 2015)
-    (c) Breach of confidentiality or data protection obligations
-    (d) Repeated (3 or more) minor breaches within any 12-month period
-    (e) Failure to maintain required insurance
-    (f) Assignment without consent
-    (g) Conviction of either party (or its directors) for a criminal offence relevant to the subject matter
-  13.3 Effects of termination:
-    (a) All accrued fees and charges immediately due and payable
-    (b) Return/destruction of Confidential Information and Personal Data
-    (c) Return of any property or materials
-    (d) Outstanding work product delivered (where services agreement)
-    (e) Survival clauses (Confidentiality, Liability, Indemnity, Dispute Resolution, Governing Law) continue in force
-  13.4 No prejudice: termination does not affect accrued rights or liabilities
+CLAUSE 13 — TERMINATION (≥ 280 words)
+  13.1 Termination for convenience — state notice period in full and its effect.
+  13.2 Termination for cause — write out EACH trigger as a full sentence:
+       (a) Material breach unremedied within 30 days of written notice.
+       (b) Insolvency, liquidation, receivership (Insolvency Act 2015).
+       (c) Confidentiality or data protection breach.
+       (d) Repeated minor breaches (3 or more in 12 months).
+       (e) Failure to maintain required insurance.
+       (f) Unauthorised assignment.
+       (g) Criminal conviction of a party or its directors for a relevant offence.
+  13.3 Effects of termination — write out each consequence as a full sentence:
+       All accrued fees due immediately; return/destruction of Confidential Information; return of property; delivery of outstanding work product; survival of Clauses 7, 8, 11, 14, 15.
+  13.4 State that termination does not affect accrued rights or liabilities of either party.
 
-**14. DISPUTE RESOLUTION** (400+ words)
-  14.1 Negotiation: senior representatives to meet within 14 days of written notice of dispute; attempt good faith resolution within 30 days
-  14.2 Mediation: if negotiation fails, submit to mediation under the Nairobi Centre for International Arbitration (NCIA) Mediation Rules within 30 days; costs shared equally
-  14.3 Arbitration: if mediation fails within 60 days, dispute referred to binding arbitration:
-    (a) Governed by the Arbitration Act, 1995 (No. 4 of 1995) as amended
-    (b) Administered by the Nairobi Centre for International Arbitration (NCIA)
-    (c) Seat: Nairobi, Kenya
-    (d) Language: English
-    (e) Arbitral tribunal: sole arbitrator (disputes below KES 10,000,000) / three arbitrators (above)
-    (f) Award: final, binding, and enforceable
-  14.4 Injunctive relief: either party may seek urgent injunctive or other equitable relief from the High Court of Kenya without breach of this clause
-  14.5 Governing law for dispute resolution: Laws of Kenya
+CLAUSE 14 — DISPUTE RESOLUTION (≥ 220 words)
+  14.1 Negotiation: write out in full — written notice, 14-day meeting requirement, 30-day good faith resolution period.
+  14.2 Mediation: write out in full — NCIA Mediation Rules, 30-day period, equal cost sharing.
+  14.3 Arbitration: write out in full — Arbitration Act 1995, NCIA administration, seat (Nairobi), language (English), tribunal composition (sole arbitrator below KES 10M; three above), final and binding award.
+  14.4 Injunctive relief: state that either party may seek urgent interim relief from the High Court of Kenya without breaching this clause.
+  14.5 Governing law: Laws of Kenya.
 
-**15. GENERAL PROVISIONS** (600+ words)
-  15.1 Entire Agreement: supersedes all prior agreements, representations, and understandings (oral or written) on the subject matter; each party confirms it has not relied on any representation not expressly set out herein
-  15.2 Amendments: valid only if in writing and signed by authorised representatives of both parties
-  15.3 Waiver: failure or delay in exercising a right is not a waiver; any waiver must be express and in writing
-  15.4 Severability: invalid or unenforceable provisions severed; remainder continues in full force
-  15.5 Assignment: neither party may assign rights or obligations without prior written consent; consent not to be unreasonably withheld; CSKSL [or equivalent] may assign to an Affiliate without consent
-  15.6 Notices: in writing; delivered by hand (effective on delivery), registered post (effective 3 Business Days after posting), courier (effective on receipt), or email (effective on confirmed receipt); addresses as set out in Clause 1 (Parties) or as notified in writing
-  15.7 Counterparts: may be executed in counterparts, each of which is an original; electronic execution (Electronic Transactions Act, 2022; Business Laws (Amendment) Act, 2020) permissible
-  15.8 Costs: each party bears its own legal costs of negotiating and executing this Agreement unless otherwise stated
-  15.9 Relationship: independent contractors; no agency, partnership, joint venture, or employment relationship
-  15.10 Third parties: no rights under this Agreement conferred on any third party (Contracts (Third Party Rights) — no equivalent Kenyan statute; state exclusion expressly)
-  15.11 Time: time is of the essence in respect of all obligations with specific dates
-  15.12 Language: English is the governing language; any translation is for convenience only
-  15.13 Stamp Duty: parties acknowledge stamp duty may be payable per Stamp Duty Act (Cap. 480); responsible party identified herein
-  15.14 Anti-Bribery: each party warrants compliance with the Bribery Act (Anti-Corruption and Economic Crimes Act, 2003, Cap. 65); no facilitation payments
-  15.15 Schedules and Annexures: form part of this Agreement; in case of conflict, Agreement body prevails over Schedules
+CLAUSE 15 — GENERAL PROVISIONS (≥ 300 words)
+  Write out each of the following as a full paragraph of at least 2 sentences:
+  15.1 Entire Agreement: supersedes all prior communications; non-reliance statement.
+  15.2 Amendments: in writing, signed by authorised representatives only.
+  15.3 Waiver: failure to exercise is not a waiver; waivers must be express and in writing.
+  15.4 Severability: invalid provisions severed; remainder continues in full force.
+  15.5 Assignment: consent required; not to be unreasonably withheld; permitted affiliate assignment.
+  15.6 Notices: full delivery methods, effective dates for each method, and notice addresses.
+  15.7 Counterparts and electronic execution: Business Laws (Amendment) Act 2020 reference.
+  15.8 Costs: each party bears own legal costs.
+  15.9 Relationship of parties: independent contractors; no agency, partnership, employment, or joint venture.
+  15.10 Third party rights: expressly excluded.
+  15.11 Time of the essence.
+  15.12 Governing language: English.
+  15.13 Stamp duty: Stamp Duty Act (Cap. 480); identify responsible party.
+  15.14 Anti-bribery: Anti-Corruption and Economic Crimes Act 2003 (Cap. 65) compliance warranty.
+  15.15 Schedules form part of Agreement; Agreement body prevails on conflict.
 
-**EXECUTION BLOCK**
-"IN WITNESS WHEREOF the Parties have executed this Agreement as of the date first written above."
-
-For each party:
-  SIGNED by: ___________________________
-  Name: ________________________________
-  Designation: _________________________
-  For and on behalf of: _________________
-  In the presence of:
-    Witness Name: ________________________
-    Witness ID No.: ______________________
-    Witness Address: _____________________
+EXECUTION BLOCK:
+  "IN WITNESS WHEREOF the Parties have executed this Agreement as of the date first written above."
+  For each party — write out full signature block:
+    SIGNED by [Party name]
+    Signature: ___________________________
+    Full Name: ___________________________
+    Designation/Title: ____________________
+    For and on behalf of: _________________
+    Date: ________________________________
+    In the presence of:
     Witness Signature: ___________________
+    Witness Full Name: ___________________
+    Witness National ID No.: ______________
+    Witness Physical Address: _____________
     Date: ________________________________
 
-**SCHEDULES** (where applicable)
-  - Schedule 1: Scope of Services / Technical Specifications
-  - Schedule 2: Fee Schedule / Pricing
-  - Schedule 3: Service Level Agreement / KPIs
-  - Schedule 4: List of Key Personnel
-  - Schedule 5: Form of Performance Bond / Bank Guarantee (where applicable)
+SCHEDULES (include all that apply, with placeholder content):
+  Schedule 1: Scope of Services / Technical Specifications
+  Schedule 2: Fee Schedule and Payment Plan
+  Schedule 3: Service Level Agreement / KPIs
+  Schedule 4: Key Personnel
+  Schedule 5: Form of Bank Guarantee (where applicable)
 """
-
 
 # ══════════════════════════════════════════════════════════════════
 # BLUEPRINT: AFFIDAVITS
@@ -773,7 +790,7 @@ LEGAL COMPLIANCE: Power of Attorney Act (Cap. 285), Registration of Documents Ac
 # MANDATORY DISCLAIMER
 # ══════════════════════════════════════════════════════════════════
 DISCLAIMER = """
-<p>IMPORTANT LEGAL DISCLAIMER: This document has been generated by SmartClause, an AI-assisted legal drafting tool, for use as a starting point only. It is not a substitute for professional legal advice. Legal requirements, applicable statutes, and case law change frequently. Before relying on, executing, or filing this document, you must have it reviewed by a qualified Advocate of the High Court of Kenya admitted to the Roll of Advocates under the Advocates Act (Cap. 16) and regulated by the Law Society of Kenya (LSK). SmartClause and its operators accept no liability for any loss, damage, or adverse legal consequence arising from the use of this document. The user assumes full responsibility for verifying the accuracy, completeness, and legal sufficiency of this document for their specific circumstances.</p>"""
+<p>IMPORTANT LEGAL DISCLAIMER: This document has been generated by SmartClause, an AI-assisted legal drafting engine, for use as a starting point only. It is not a substitute for professional legal advice. Legal requirements, applicable statutes, and case law change frequently. Before relying on, executing, or filing this document, you must have it reviewed by a qualified Advocate of the High Court of Kenya admitted to the Roll of Advocates under the Advocates Act (Cap. 16) and regulated by the Law Society of Kenya (LSK). SmartClause and its operators accept no liability for any loss, damage, or adverse legal consequence arising from the use of this document. The user assumes full responsibility for verifying the accuracy, completeness, and legal sufficiency of this document for their specific circumstances.</p>"""
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -980,36 +997,66 @@ class DocumentGenerator:
         doc_subtype = user_payload["document"]["subtype"]
         subtype_str = f" ({doc_subtype})" if doc_subtype else ""
 
+        # Build contract-specific word count gate
+        is_contract = doc_type == "Agreement"
+        contract_gate = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTRACT WORD COUNT GATE — MANDATORY FOR AGREEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This contract MUST contain at least 3,000 words of substantive legal prose (HTML tags excluded).
+
+CLAUSE-BY-CLAUSE BUDGET — hit every target before moving to the next clause:
+  Header + Parties + Recitals  →  write until ≥ 350 words, THEN proceed to Clause 1
+  Clause 1  Definitions        →  write until ≥ 550 words, THEN proceed to Clause 2
+  Clause 2  Scope              →  write until ≥ 450 words, THEN proceed to Clause 3
+  Clause 3  Term               →  write until ≥ 200 words, THEN proceed to Clause 4
+  Clause 4  Payment            →  write until ≥ 350 words, THEN proceed to Clause 5
+  Clause 5  Obligations        →  write until ≥ 450 words, THEN proceed to Clause 6
+  Clause 6  Warranties         →  write until ≥ 300 words, THEN proceed to Clause 7
+  Clause 7  Indemnities        →  write until ≥ 200 words, THEN proceed to Clause 8
+  Clause 8  Confidentiality    →  write until ≥ 250 words, THEN proceed to Clause 9
+  Clause 9  IP                 →  write until ≥ 150 words, THEN proceed to Clause 10
+  Clause 10 Insurance          →  write until ≥ 150 words, THEN proceed to Clause 11
+  Clause 11 Liability          →  write until ≥ 180 words, THEN proceed to Clause 12
+  Clause 12 Force Majeure      →  write until ≥ 150 words, THEN proceed to Clause 13
+  Clause 13 Termination        →  write until ≥ 280 words, THEN proceed to Clause 14
+  Clause 14 Dispute Resolution →  write until ≥ 220 words, THEN proceed to Clause 15
+  Clause 15 General Provisions →  write until ≥ 300 words, THEN write Execution Block
+
+CRITICAL RULES:
+  — Write EVERY sub-clause as complete, grammatically correct sentences.
+  — If a clause feels short, add more specific provisions, examples, and procedural detail.
+  — Do NOT use bullet fragments, do NOT summarise, do NOT skip sub-clauses.
+  — If you are approaching the token limit mid-document, STOP at the end of the current clause
+    (never mid-sentence) so the continuation system can resume cleanly.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+""" if is_contract else ""
+
         user_content = f"""You must now draft a complete, LSK-compliant Kenyan legal document using the INPUT DATA below.
 
 DOCUMENT TYPE: {doc_type}{subtype_str}
 
 INPUT DATA:
 {json.dumps(user_payload, indent=2, ensure_ascii=False)}
+{contract_gate}
+PRE-OUTPUT CHECKLIST — verify every item before writing the first HTML tag:
+[ ] 1. ALL variables from INPUT DATA injected; none left as generic placeholders
+[ ] 2. [SQUARE BRACKET] placeholders used ONLY for genuinely absent fields
+[ ] 3. Pronouns consistent with gender field (affidavits) or party type throughout
+[ ] 4. P.O. Box, postal code, and town present for every party/deponent
+[ ] 5. National ID/Passport numbers present for every individual
+[ ] 6. KRA PIN numbers present for every party where applicable
+[ ] 7. All statutory references cited correctly with Cap. number or year
+[ ] 8. Numbering hierarchy (1., 1.1, 1.1.1, (a), (i)) strictly correct throughout
+[ ] 9. No clause truncated, summarised, or left incomplete
+[ ] 10. For Agreements: EVERY clause budget above has been met before moving on
+[ ] 11. Disclaimer paragraph appears at the very end
+[ ] 12. Execution/sworn block correctly formatted for the document type
+[ ] 13. For affidavits: (a) NO subheadings anywhere in body; (b) heading is "AFFIDAVIT" only, no name; (c) averments sequentially numbered, no secondary numbering; (d) both mandatory closing averments present; (e) body text is text-align:justify; (f) sworn block uses two-column HTML table
+[ ] 14. For Wills: two witnesses confirmed not to be beneficiaries
+[ ] 15. For POA: Certificate of Verification by Advocate included
 
-GENERATION CHECKLIST — verify each item before outputting:
-[ ] 1. ALL variables from INPUT DATA are injected into the document; none left as generic placeholders
-[ ] 2. All [SQUARE BRACKET] placeholders are used ONLY where a required field is genuinely absent from the payload
-[ ] 3. Pronouns are consistent with the gender field (affidavits) or party type (agreements) throughout
-[ ] 4. P.O. Box, postal code, and town are present for every party/deponent
-[ ] 5. National ID/Passport numbers are present for every individual
-[ ] 6. KRA PIN numbers are present for every party (where applicable)
-[ ] 7. All statutory references are cited correctly with Cap. number or year
-[ ] 8. Numbering hierarchy (1., 1.1, 1.1.1, (a), (i)) is strictly correct throughout
-[ ] 9. No clause is truncated, summarised, or left incomplete
-[ ] 9b. For Agreements/Contracts: the document is at least 3,000 words of substantive legal text — if not, expand definitions, obligations, and recitals before outputting
-[ ] 10. The mandatory disclaimer div appears at the very end of the HTML
-[ ] 11. Execution/sworn block is correctly formatted for the document type
-[ ] 12. Minimum word count for the document type has been reached
-[ ] 13. For affidavits: (a) NO subheadings or section labels exist anywhere in the body; (b) heading is just "AFFIDAVIT" with no deponent name; (c) all averments are sequentially numbered with no secondary numbering; (d) both mandatory closing averments (Cap. 15 reference + knowledge/belief) are present; (e) all body text uses text-align:justify; (f) sworn block uses the two-column HTML table format
-[ ] 14. For Wills: attestation clause confirms two witnesses who are not beneficiaries
-[ ] 15. For POA: Certificate of Verification by Advocate is included
-
-OUTPUT: Complete HTML document only. Begin with the document title tag. End with the disclaimer paragraph. Nothing else.
-
-COMPLETION REQUIREMENT: You MUST write every clause through to the end. The last thing in your output must be the
-disclaimer text. If you are running out of space, do not truncate clauses — end at the closest clean clause boundary
-so a continuation can resume. Never stop mid-sentence."""
+OUTPUT: Complete HTML only. First character must be <. Last element must be the disclaimer paragraph. Nothing else."""
 
         return [
             {"role": "system",  "content": system_content},

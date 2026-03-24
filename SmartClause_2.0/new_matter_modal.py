@@ -2,7 +2,7 @@ import streamlit as st
 from typing import Dict, Any, List
 from datetime import date
 import json
-from analytics import Analytics
+
 import os
 
 class DateJSONEncoder(json.JSONEncoder):
@@ -716,6 +716,166 @@ def render_new_matter_modal():
     
     @st.dialog(title, width="large")
     def modal_content():
+        # Check if we are already processing for responsiveness
+        if st.session_state.get("is_creating_matter", False):
+            data = st.session_state.get("temp_matter_data")
+            if not data:
+                st.session_state.is_creating_matter = False
+                st.rerun()
+            
+            st.info("🚀 Creating matter and preparing document...")
+            with st.spinner("Connecting to database..."):
+                try:
+                    # Extract variables from temp data with p_ prefix to avoid shadowing
+                    p_matter_name = data["matter_name"]
+                    p_client = data["client"]
+                    p_doc_type = data["doc_type"]
+                    p_counterparty = data["counterparty"]
+                    p_internal_ref = data["internal_ref"]
+                    p_selected_subtype = data["selected_subtype"]
+                    p_dynamic_values = data["dynamic_values"]
+                    p_mode = data["mode"]
+                    p_existing_matter_id = data["existing_matter_id"]
+                    
+                    # PAYWALL CHECK: Ensure user has credits or active subscription
+                    from subscription_manager import SubscriptionManager
+                    from database import DatabaseManager
+                    from analytics import Analytics
+                    
+                    db = DatabaseManager()
+                    sub_manager = SubscriptionManager(db)
+                    user_id = st.session_state.user_id
+                    
+                    can_generate, reason = sub_manager.can_generate_document(user_id)
+                    
+                    if not can_generate:
+                        st.session_state.is_creating_matter = False
+                        Analytics().track_event("generation_blocked_paywall", {"reason": reason, "mode": p_mode})
+                        from auth import get_session_param
+                        session_param = get_session_param()
+                        st.error(f"⚠️ Cannot generate document: {reason}")
+                        st.markdown(f"""
+                        <div style="background-color: rgba(255, 75, 75, 0.1); border: 1px solid rgba(255, 75, 75, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <p style="margin: 0; color: #ff6b6b; font-size: 14px;">
+                                Please upgrade your plan or add more seats to continue.
+                            </p>
+                            <a href="?view=pricing{session_param}" target="_self" style="display: inline-block; margin-top: 10px; background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: 500;">
+                                View Pricing Options
+                            </a>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        if st.button("Back to Form"):
+                            st.rerun()
+                        return
+
+                    payload = {
+                        "matter": {
+                            "name": p_matter_name.strip() if p_matter_name else "",
+                            "client": p_client.strip() if p_client else "",
+                            "counterparty": p_counterparty.strip() if p_counterparty else "",
+                            "internal_ref": p_internal_ref.strip() if p_internal_ref else "",
+                        },
+                        "document": {
+                            "type": p_doc_type,
+                            "subtype": p_selected_subtype if p_selected_subtype != p_doc_type else None,
+                            "variables": p_dynamic_values,
+                        },
+                        "generation_config": {
+                            "jurisdiction": "Kenya", 
+                            "language": "English", 
+                            "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                        }
+                    }
+                    
+                    db.set_user(st.session_state.user_id)
+                    
+                    if p_mode == "new_matter":
+                        matter = db.create_matter(
+                            name=p_matter_name.strip() if p_matter_name else "",
+                            client_name=p_client.strip() if p_client else "",
+                            counterparty=p_counterparty.strip() if p_counterparty else None,
+                            internal_reference=p_internal_ref.strip() if p_internal_ref else None,
+                            matter_type=p_doc_type,
+                            jurisdiction="Kenya"
+                        )
+                        matter_id = matter["id"]
+                        Analytics().track_event("matter_created", {"matter_id": matter_id, "doc_type": p_doc_type})
+                    else:
+                        matter_id = p_existing_matter_id
+                    
+                    document_title = f"{p_selected_subtype or p_doc_type} - {p_client.strip() if p_client else 'Client'}"
+                    document = db.create_document(
+                        matter_id=matter_id,
+                        title=document_title,
+                        document_type=p_doc_type,
+                        document_subtype=p_selected_subtype,
+                        generation_payload=payload
+                    )
+                    
+                    Analytics().track_event("document_created", {
+                        "document_id": document["id"],
+                        "matter_id": matter_id,
+                        "doc_type": p_doc_type,
+                        "subtype": p_selected_subtype,
+                        "mode": p_mode
+                    })
+                    
+                    # Record document usage for subscription tracking
+                    try:
+                        sub_manager.record_document_generation(
+                            user_id, 
+                            document_type=p_selected_subtype or p_doc_type
+                        )
+                    except Exception:
+                        pass
+                    
+                    # Clean up processing state
+                    st.session_state.is_creating_matter = False
+                    st.session_state.pop("temp_matter_data", None)
+                    
+                    # Set up generation state for the NEW document
+                    st.session_state.current_matter_id = matter_id
+                    st.session_state.current_document_id = document["id"]
+                    st.session_state.new_matter_payload = payload
+                    st.session_state.generation_complete = False
+                    
+                    # IMPORTANT: Clear modal state
+                    st.session_state.show_new_matter = False
+                    st.session_state.modal_mode = "new_matter"
+                    st.session_state.existing_matter_id = None
+                    st.session_state.wait_for_generation_start = True
+                    
+                    # Clear stale editor state
+                    stale_keys = [
+                        "current_version_id", "editor_content", "editor_original_content",
+                        "last_component_content", "editor_comments", "editor_initialized",
+                        "autosave_in_progress", "unsaved_changes", "last_autosave",
+                        "chat_session_id", "chat_messages", "chat_is_streaming",
+                        "show_versions_panel", "pending_autosave_content",
+                    ]
+                    for key in stale_keys:
+                        st.session_state.pop(key, None)
+                    
+                    for k in [k for k in list(st.session_state.keys()) if k.startswith("editor_data_loaded_")]:
+                        st.session_state.pop(k, None)
+
+                    # Final redirection
+                    from auth import update_query_params
+                    update_query_params({
+                        "view": "editor", 
+                        "document_id": document["id"],
+                        "matter_id": matter_id
+                    })
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.session_state.is_creating_matter = False
+                    from error_helpers import show_error
+                    show_error(e, "matter")
+                    if st.button("Back to Form"):
+                        st.rerun()
+            return # Exit after processing
+
         st.markdown("""
         <style>
         .sc-modal-body {
@@ -846,156 +1006,20 @@ def render_new_matter_modal():
                 if missing_fields:
                     st.error("Please fill in all required fields")
                 else:
-                    # PAYWALL CHECK: Ensure user has credits or active subscription
-                    from subscription_manager import SubscriptionManager
-                    from database import DatabaseManager
-                    from analytics import Analytics
-                    
-                    db = DatabaseManager()
-                    sub_manager = SubscriptionManager(db)
-                    user_id = st.session_state.user_id
-                    
-                    can_generate, reason = sub_manager.can_generate_document(user_id)
-                    
-                    if not can_generate:
-                        Analytics().track_event("generation_blocked_paywall", {"reason": reason, "mode": mode})
-                        from auth import get_session_param
-                        session_param = get_session_param()
-                        st.error(f"⚠️ Cannot generate document: {reason}")
-                        st.markdown(f"""
-                        <div style="background-color: rgba(255, 75, 75, 0.1); border: 1px solid rgba(255, 75, 75, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <p style="margin: 0; color: #ff6b6b; font-size: 14px;">
-                                Please upgrade your plan or add more seats to continue.
-                            </p>
-                            <a href="?view=pricing{session_param}" target="_self" style="display: inline-block; margin-top: 10px; background-color: #ff4b4b; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 13px; font-weight: 500;">
-                                View Pricing Options
-                            </a>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        return # Stop execution
-                        
-                    payload = {
-                        "matter": {
-                            "name": matter_name.strip() if matter_name else "",
-                            "client": client.strip() if client else "",
-                            "counterparty": counterparty.strip() if counterparty else "",
-                            "internal_ref": internal_ref.strip() if internal_ref else "",
-                        },
-                        "document": {
-                            "type": doc_type,
-                            "subtype": selected_subtype if selected_subtype != doc_type else None,
-                            "variables": dynamic_values,
-                        },
-                        "generation_config": {
-                            "jurisdiction": "Kenya", 
-                            "language": "English", 
-                            "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-                        }
+                    # Set processing flag and cache data for the intermediate rerun
+                    st.session_state.is_creating_matter = True
+                    st.session_state.temp_matter_data = {
+                        "matter_name": matter_name,
+                        "client": client,
+                        "doc_type": doc_type,
+                        "counterparty": counterparty,
+                        "internal_ref": internal_ref,
+                        "selected_subtype": selected_subtype,
+                        "dynamic_values": dynamic_values,
+                        "mode": mode,
+                        "existing_matter_id": existing_matter_id
                     }
-                    
-                    from database import DatabaseManager
-                    db = DatabaseManager()
-                    db.set_user(st.session_state.user_id)
-                    
-                    try:
-                        if mode == "new_matter":
-                            matter = db.create_matter(
-                                name=matter_name.strip() if matter_name else "",
-                                client_name=client.strip() if client else "",
-                                counterparty=counterparty.strip() if counterparty else None,
-                                internal_reference=internal_ref.strip() if internal_ref else None,
-                                matter_type=doc_type,
-                                jurisdiction="Kenya"
-                            )
-                            matter_id = matter["id"]
-                            Analytics().track_event("matter_created", {"matter_id": matter_id, "doc_type": doc_type})
-                        else:
-                            matter_id = existing_matter_id
-                        
-                        document_title = f"{selected_subtype or doc_type} - {client.strip() if client else 'Client'}"
-                        document = db.create_document(
-                            matter_id=matter_id,
-                            title=document_title,
-                            document_type=doc_type,
-                            document_subtype=selected_subtype,
-                            generation_payload=payload
-                        )
-                        
-                        Analytics().track_event("document_created", {
-                            "document_id": document["id"],
-                            "matter_id": matter_id,
-                            "doc_type": doc_type,
-                            "subtype": selected_subtype,
-                            "mode": mode
-                        })
-                        
-                        # Record document usage for subscription tracking
-                        try:
-                            usage_recorded = sub_manager.record_document_generation(
-                                user_id, 
-                                document_type=selected_subtype or doc_type
-                            )
-                            if usage_recorded:
-                                print(f"✅ Document usage recorded for user {user_id}")
-                            else:
-                                print(f"⚠️ Failed to record document usage for user{user_id}")
-                        except Exception as usage_error:
-                            print(f"⚠️ Document usage tracking error: {usage_error}")
-                            # Don't block document creation if usage tracking fails
-                        
-                        # Set up generation state for the NEW document
-                        st.session_state.current_matter_id = matter_id
-                        st.session_state.current_document_id = document["id"]
-                        st.session_state.new_matter_payload = payload
-                        st.session_state.generation_complete = False
-                        
-                        # IMPORTANT: Close modal BEFORE redirecting so it does not
-                        # re-open and block the editor's streaming generation UI.
-                        st.session_state.show_new_matter = False
-                        st.session_state.modal_mode = "new_matter"
-                        st.session_state.existing_matter_id = None
-                        st.session_state.wait_for_generation_start = False
-                        
-                        # CRITICAL: Clear ALL stale editor state from any previous
-                        # editing session so the generation phase runs fresh for the
-                        # new document. Without this, leftover `generation_complete`,
-                        # `current_version_id`, and `editor_data_loaded_*` cache keys
-                        # cause the editor to skip generation and show old content.
-                        stale_keys = [
-                            "current_version_id",
-                            "editor_content",
-                            "editor_original_content",
-                            "last_component_content",
-                            "editor_comments",
-                            "editor_initialized",
-                            "autosave_in_progress",
-                            "unsaved_changes",
-                            "last_autosave",
-                            "chat_session_id",
-                            "chat_messages",
-                            "chat_is_streaming",
-                            "show_versions_panel",
-                            "pending_autosave_content",
-                        ]
-                        for key in stale_keys:
-                            st.session_state.pop(key, None)
-                        
-                        # Also clear any editor_data_loaded_* cache keys from prior docs
-                        cache_keys_to_remove = [
-                            k for k in list(st.session_state.keys())
-                            if k.startswith("editor_data_loaded_")
-                        ]
-                        for k in cache_keys_to_remove:
-                            st.session_state.pop(k, None)
-
-                        # Navigate to editor
-                        from auth import update_query_params
-                        update_query_params({"view": "editor"})
-                        st.rerun()
-                        
-                    except Exception as e:
-                        from error_helpers import show_error
-                        show_error(e, "matter")
+                    st.rerun()
 
     modal_content()
 

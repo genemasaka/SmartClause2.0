@@ -4,7 +4,7 @@ Handles case management operations, AI integration, and deadline calculations
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta, date
 from database import DatabaseManager
 import openai

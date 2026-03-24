@@ -9,7 +9,11 @@ from database import DatabaseManager
 from payment_flow import PaymentFlowManager
 from mpesa_handler import MpesaHandler
 import time
+import logging
 from analytics import Analytics
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 def render_pricing_page():
     """Main pricing page with enterprise subscription tiers"""
@@ -92,7 +96,7 @@ def render_pricing_page():
     
     if user_id:
         db.set_user(user_id)
-        sub_manager = SubscriptionManager(db)
+        subscription_mgr = SubscriptionManager(db)
         
         # Initialize payment manager
         try:
@@ -102,7 +106,7 @@ def render_pricing_page():
             st.error(f"Failed to initialize payment system: {e}")
             payment_manager = None
             
-        status = sub_manager.get_user_status(user_id)
+        status = subscription_mgr.get_user_status(user_id)
         current_tier = status.get("tier", TRIAL_TIER)
         org_name = status.get("organization_name", "None")
     else:
@@ -302,7 +306,7 @@ def render_pricing_page():
         if user_id and current_tier != ENTERPRISE_TIER:
             if st.button("Contact Sales", key="buy_enterprise", use_container_width=True):
                 Analytics().track_event("plan_selection_initiated", {"tier": ENTERPRISE_TIER, "is_contact_sales": True})
-                st.info("📧 Contact us at sales@smartclause.co.ke for Enterprise pricing")
+                st.info("📧 Contact us at support@smartclause.net for Enterprise pricing")
         else:
             st.info("Current Plan" if current_tier == ENTERPRISE_TIER else "Log in to subscribe")
     
@@ -310,7 +314,7 @@ def render_pricing_page():
 
     # Payment Modal Logic
     if st.session_state.get("show_payment_modal"):
-        render_payment_modal(payment_manager, user_id, org_name)
+        render_payment_modal(payment_manager, user_id, org_name, subscription_mgr)
     
     # FAQ Section
     st.markdown("---")
@@ -333,7 +337,7 @@ def render_pricing_page():
             st.write(answer)
 
 
-def render_payment_modal(payment_manager, user_id, org_name):
+def render_payment_modal(payment_manager, user_id, org_name, subscription_mgr):
     """
     Render modal for M-Pesa payment
     """
@@ -420,7 +424,16 @@ def render_payment_modal(payment_manager, user_id, org_name):
                     # Fetch org ID
                     org_data = payment_manager.db.get_user_organization(user_id)
                     if not org_data:
-                        st.error("Organization not found. Please contact support.")
+                        # FALLBACK: Try to initialize one proactively
+                        logger.info(f"Proactively initializing organization for user {user_id} during payment")
+                        org_data = subscription_mgr.initialize_user_subscription(
+                            user_id=user_id,
+                            user_email=st.session_state.get("email", ""),
+                            user_name=st.session_state.get("full_name")
+                        )
+                    
+                    if not org_data:
+                        st.error("Organization not found and could not be initialized. Please contact support.")
                         return
                     
                     org_id = org_data['id']
