@@ -416,16 +416,25 @@ if view != "generation_focus":
             position: fixed;
             bottom: 0;
             left: 0;
-            width: 250px;
+            width: 256px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             background: #1E1E1E;
             z-index: 999;
             box-sizing: border-box;
         }
+
+        @media (max-width: 991px) {
+            .sidebar-footer {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
         
-        /* Adjust for expanded sidebar */
-        [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
-            width: 250px;
+        /* Adjust for expanded sidebar - Desktop Only */
+        @media (min-width: 992px) {
+            [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
+                width: 256px;
+            }
         }
         
         .sidebar-footer-content {

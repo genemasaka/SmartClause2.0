@@ -734,6 +734,78 @@ def login_page():
             0%, 100% { opacity: 1; }
             50%       { opacity: 0.3; }
         }
+
+        /* ── MOBILE AUTH LOGO ──────────────────────────────────────── */
+        /* Hidden on desktop (logo appears in left brand panel) */
+        .auth-mobile-logo {
+            display: none;
+        }
+        /* Show logo centered above form on mobile */
+        @media (max-width: 991px) {
+            .auth-mobile-logo {
+                display: flex !important;
+                justify-content: center !important;
+                width: 100% !important;
+                margin-bottom: 28px !important;
+            }
+            .auth-mobile-logo img {
+                width: 150px !important;
+                height: auto !important;
+            }
+        }
+
+        /* ── RESPONSIVE OVERRIDES (MOBILE) ─────────────────────────── */
+        @media (max-width: 991px) {
+            /* Hide the blueprint brand section entirely on mobile to keep it clean */
+            .auth-bg-left, .auth-brand-panel {
+                display: none !important;
+            }
+            .auth-bg-right {
+                position: fixed !important;
+                top: 0; left: 0;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: #000000 !important;
+            }
+
+            [data-testid="stHorizontalBlock"] {
+                position: relative !important;
+                display: block !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                overflow-y: auto !important;
+            }
+
+            [data-testid="column"] {
+                width: 100% !important;
+                min-width: 100% !important;
+                height: auto !important;
+                min-height: 100vh !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+
+            /* Hide the first column (blueprint) on mobile */
+            [data-testid="column"]:nth-of-type(1) {
+                display: none !important;
+            }
+
+            /* Make the form column fill the screen */
+            [data-testid="column"]:nth-of-type(2) {
+                background: transparent !important;
+                padding: 24px !important;
+            }
+
+            .auth-form-wrapper {
+                padding-top: 0 !important;
+                height: auto !important;
+            }
+            .auth-form-inner {
+                width: 90% !important;
+                max-width: 360px !important;
+            }
+        }
     </style>
 
     <!-- JS: force right column internals to flex-center vertically -->
@@ -874,12 +946,26 @@ def login_page():
     
     # Right column - Form
     with right_col:
-        st.markdown('<div class="auth-form-wrapper"><div class="auth-form-inner">', unsafe_allow_html=True)
+        # Build mobile logo HTML (shown above form on small screens via CSS)
+        try:
+            import base64 as _b64r
+            import os as _osr
+            _lp_r = "assets/sidebar_logo.png"
+            if _osr.path.exists(_lp_r):
+                with open(_lp_r, "rb") as _lf_r:
+                    _ld_r = _b64r.b64encode(_lf_r.read()).decode("utf-8")
+                _mobile_logo_html = f'<div class="auth-mobile-logo"><img src="data:image/png;base64,{_ld_r}" alt="SmartClause"></div>'
+            else:
+                _mobile_logo_html = '<div class="auth-mobile-logo" style="display:none;font-size:20px;font-weight:800;color:#fff;justify-content:center;margin-bottom:24px;">SmartClause</div>'
+        except Exception:
+            _mobile_logo_html = '<div class="auth-mobile-logo" style="display:none;font-size:20px;font-weight:800;color:#fff;justify-content:center;margin-bottom:24px;">SmartClause</div>'
+
+        st.markdown(f'<div class="auth-form-wrapper">{_mobile_logo_html}<div class="auth-form-inner">', unsafe_allow_html=True)
         
         if st.session_state["auth_view"] == "login":
             st.markdown("""
             <div class="auth-title">Welcome</div>
-            <div class="auth-subtitle">Sign in to SmartClause account.</div>
+            <div class="auth-subtitle">Sign in to SmartClause.</div>
             """, unsafe_allow_html=True)
             
             with st.form("login_form", clear_on_submit=False):
