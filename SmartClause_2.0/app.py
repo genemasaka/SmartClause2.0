@@ -23,12 +23,31 @@ from analytics import Analytics
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
 st.set_page_config(
-    page_title="SmartClause",
+    page_title="SmartClause | Legal Drafting Engine For Kenyan Advocates",
     page_icon="assets/smartclause_badge.png",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
+# SEO Meta Tag Injection & JavaScript Fallback
+st.markdown(
+    """
+    <head>
+        <meta name="description" content="The high-performance legal drafting engine for Kenyan advocates. Automate Wills, Affidavits, and Agreements in minutes. LSK-standard and ODPC compliant.">
+        <meta name="keywords" content="Legal Tech Kenya, SmartClause, Legal Drafting AI, LSK, Kenyan Law, Advocate Tools, Automated Affidavits">
+        <meta property="og:title" content="SmartClause | AI-Powered Legal Drafting">
+        <meta property="og:description" content="Empowering Kenyan Advocates with automated drafting precision.">
+        <meta property="og:image" content="https://smartclause.net/assets/smartclause_badge.png">
+    </head>
+    <noscript>
+        <h1>SmartClause: Legal Drafting for Kenyan Advocates</h1>
+        <p>SmartClause is a high-performance drafting engine built for the Kenyan legal market. 
+        Automate Wills, Affidavits, and Agreements with LSK-standard templates. 
+        If you are seeing this message, please enable JavaScript to use the application.</p>
+    </noscript>
+    """,
+    unsafe_allow_html=True
+)
 # ============================================================================
 # GENERATION FOCUS MODE FLAG - Used for routing
 # ============================================================================
@@ -78,15 +97,24 @@ if _os.path.exists(_favicon_path):
 # ============================================================================
 # LOAD CSS BEFORE AUTHENTICATION CHECK
 # ============================================================================
-def local_css(path: str = "styles.css"):
+def local_css(file_name: str = "styles.css"):
+    """
+    Robustly resolves the path to the CSS file and injects it.
+    Prevents pathing errors on VPS deployments.
+    """
+    # 1. Get the absolute directory of the current Python script (app.py)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 2. Construct the full absolute path to the CSS file
+    css_path = os.path.join(current_dir, file_name)
+
+    # 3. Read and inject
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(css_path, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
-        pass
-
-local_css()
-
+        # Swap 'pass' for a visible error so you know immediately if it fails
+        st.error(f"Styling Error: Could not locate {css_path}")
 # ============================================================================
 # CRITICAL: PRESERVE QUERY PARAMS BEFORE AUTH CHECK
 # ============================================================================

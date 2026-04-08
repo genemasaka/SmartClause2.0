@@ -16,7 +16,7 @@ class EmailService:
         self.smtp_user = os.getenv("SMTP_USER")
         self.smtp_pass = os.getenv("SMTP_PASS")
         self.smtp_from = os.getenv("SMTP_FROM", self.smtp_user)
-        self.app_url = os.getenv("APP_URL", "http://localhost:8501").rstrip("/")
+        self.app_url = os.getenv("APP_URL", "http://smartclause.net").rstrip("/")
         
     def _get_template(self, template_name: str, placeholders: Dict[str, Any]) -> str:
         """Read template file and replace placeholders."""
