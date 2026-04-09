@@ -438,9 +438,9 @@ if view != "generation_focus":
         # Robust sidebar styling with absolute positioned footer
         st.markdown("""
         <style>
-        /* Force sidebar to act as containing block for fixed position descendants */
+        /* Force sidebar to act as containing block and clip overflow without conflicting with Streamlit transforms */
         [data-testid="stSidebar"] {
-            transform: translateZ(0);
+            contain: layout paint;
         }
         
         /* Ensure sidebar content is scrollable with space for footer */
