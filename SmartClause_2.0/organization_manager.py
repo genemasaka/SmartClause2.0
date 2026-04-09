@@ -505,7 +505,7 @@ class OrganizationManager:
                 except Exception:
                     period_start = datetime.now()
             if not period_end:
-                period_end = period_start + timedelta(days=14)
+                period_end = period_start + timedelta(days=7)
             tier_display = org.get('subscription_tier', 'trial')
         else:
             if not period_start:
@@ -616,26 +616,32 @@ class OrganizationManager:
         
         # Check trial period expiration for trial users
         if tier == SubscriptionTier.TRIAL.value:
-            # Trial users get unlimited documents for 14 days
+            # Trial users get up to 7 documents for 7 days
             if org.get('created_at'):
                 try:
                     created_at = datetime.fromisoformat(org['created_at'].replace('Z', '+00:00'))
-                    trial_days = tier_config.get('trial_days', 14)
+                    trial_days = tier_config.get('trial_days', 7)
                     trial_end = created_at + timedelta(days=trial_days)
                     now = datetime.now(created_at.tzinfo)
                     
                     if now > trial_end:
                         return False, f"Trial period expired. Please upgrade to continue."
                     
-                    # Within trial period - unlimited documents
+                    # Within trial period - check document limit
                     days_left = (trial_end - now).days + 1
-                    return True, f"Trial: {days_left} days remaining (unlimited documents)"
+                    doc_limit = tier_config.get('documents_per_month', 7)
+                    # Count how many docs this user has created during the trial
+                    trial_start = created_at
+                    docs_used = self.db.get_user_document_usage(user_id, trial_start, trial_end)
+                    if docs_used >= doc_limit:
+                        return False, f"Trial document limit reached ({docs_used}/{doc_limit}). Please upgrade."
+                    return True, f"Trial: {days_left} day{'s' if days_left != 1 else ''} remaining ({docs_used}/{doc_limit} documents used)"
                 except:
                     # If date parsing fails, allow but warn
-                    return True, "Trial: unlimited documents"
+                    return True, "Trial: active"
             else:
                 # No created_at, allow with warning
-                return True, "Trial: unlimited documents"
+                return True, "Trial: active"
         
         # For paid tiers, check subscription
         if not subscription:
@@ -728,7 +734,7 @@ class OrganizationManager:
                     start = datetime.fromisoformat(org.get('created_at', str(datetime.now())).replace('Z', '+00:00'))
                 except:
                     start = datetime.now()
-                end = start + timedelta(days=14)
+                end = start + timedelta(days=7)
 
             result = self.db.record_document_usage(
                 user_id=user_id,

@@ -1867,7 +1867,7 @@ def render_document_editor():
                 # CRITICAL: Render editor as a fragment so it doesn't reload during autosaves
                 _render_editor_fragment(db, document_id, clauses_data, st.session_state.current_version_id)
             else:
-                 st.warning("🔒 Editing is restricted toTeam Plan users. You can view and export this document.")
+                 st.warning("🔒 Editing is restricted to Individual Plan users and above. You can view and export this document.")
                  
                  # Render Read-Only View
                  content_html = st.session_state.editor_content

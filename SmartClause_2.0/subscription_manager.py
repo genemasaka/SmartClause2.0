@@ -23,10 +23,10 @@ ENTERPRISE_TIER = SubscriptionTier.ENTERPRISE.value
 PRICING = {
     TRIAL_TIER: {
         "amount": 0,
-        "documents_per_month": None,  # Unlimited for 14-day trial
+        "documents_per_month": 7,  # 7 documents allowed during 7-day trial
         "name": "Free Trial",
         "per_user": False,
-        "trial_days": 14
+        "trial_days": 7
     },
     INDIVIDUAL_TIER: {
         "amount": 850000,  # KSh 8,500
@@ -91,9 +91,10 @@ class SubscriptionManager:
 
             if not org:
                 # No organization found — treat as new trial user
+                trial_doc_limit = PRICING.get(TRIAL_TIER, {}).get('documents_per_month', 7)
                 return {
                     "tier": TRIAL_TIER,
-                    "documents_remaining": None,  # Unlimited during trial
+                    "documents_remaining": trial_doc_limit,  # 7 docs during trial
                     "is_active": True,
                     "expiry_date": None,
                     "days_remaining": None,
@@ -190,9 +191,10 @@ class SubscriptionManager:
                     f"get_user_status FAILING OPEN for user {user_id}: {e}. "
                     "User is being granted trial-active access. Investigate immediately."
                 )
+                trial_doc_limit = PRICING.get(TRIAL_TIER, {}).get('documents_per_month', 7)
                 return {
                     "tier": TRIAL_TIER,
-                    "documents_remaining": None,
+                    "documents_remaining": trial_doc_limit,
                     "is_active": True,
                     "expiry_date": None,
                     "days_remaining": None,
@@ -385,7 +387,7 @@ class SubscriptionManager:
             (is_active: bool, days_remaining: int | None)
         """
         created_at_str = org.get('created_at')
-        trial_days = PRICING.get(TRIAL_TIER, {}).get('trial_days', 14)
+        trial_days = PRICING.get(TRIAL_TIER, {}).get('trial_days', 7)
 
         if not created_at_str:
             # No creation date — treat as active trial, unknown days remaining

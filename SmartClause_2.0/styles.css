@@ -1,53 +1,365 @@
-/* --------------------
-   SmartClause Theme
--------------------- */
+/* =============================================================
+   SmartClause Design System — v2
+   Custom component styles that sit on top of Streamlit's theme.
+   Background colours are owned by config.toml [theme] block.
+   This file only styles custom components (cards, buttons, etc.)
+   and fixes accessibility contrast issues.
+   ============================================================= */
+
+/* ─── 1. CSS VARIABLES ─────────────────────────────────────── */
+
 :root {
-  --bg: #0A0B0D;
-  --sidebar-bg: #13151A;
-  --panel: #1A1D24;
-  --border: #252930;
-  --text: #FFFFFF;
-  --text-muted: #9BA1B0;
-  --text-dim: #6B7280;
-  --accent: #4B9EFF;
-  --accent-hover: #5BABFF;
-  --success: #4ADE80;
-  --warning: #F59E0B;
-  --danger: #FF6B6B;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  /* These mirror the config.toml [theme] values */
+  --sc-bg:           #0A0B0D;
+  --sc-bg-raised:    #13151A;   /* sidebar / secondary background */
+  --sc-surface:      #1A1D24;   /* card / panel — always dark */
+  --sc-border:       #252930;
+  --sc-text:         #FFFFFF;
+  --sc-text-muted:   #C9CDD6;   /* raised from #9BA1B0 for better contrast */
+  --sc-text-dim:     #9BA1B0;   /* raised from #6B7280 for better contrast */
+  --sc-accent:       #4B9EFF;
+  --sc-accent-hover: #76B5FF;
+  --sc-success:      #4ADE80;
+  --sc-warning:      #F59E0B;
+  --sc-danger:       #FF6B6B;
+  --sc-radius:       12px;
+  --sc-radius-sm:    8px;
+  --sc-font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* --------------------
-   Base Overrides
--------------------- */
-html,
-body,
-[data-testid="stAppViewContainer"],
-.main {
-  background: var(--bg) !important;
-  color: var(--text);
-  font-family: var(--font);
+/* Light-mode overrides (user manually switches to light in Settings) */
+@media (prefers-color-scheme: light) {
+  :root {
+    --sc-text:       #1E293B;
+    --sc-text-muted: #475569;
+    --sc-text-dim:   #64748B;
+    /* Cards intentionally stay dark for consistent dark-card UX */
+    --sc-surface:    #1A1D24;
+    --sc-border:     #252930;
+  }
+}
+html.light,
+html[data-theme="light"] {
+  --sc-text:       #1E293B;
+  --sc-text-muted: #475569;
+  --sc-text-dim:   #64748B;
+  --sc-surface:    #1A1D24;
+  --sc-border:     #252930;
 }
 
-[data-testid="stHeader"] {
-  background-color: var(--bg) !important;
+
+/* ─── 2. SIDEBAR — ALWAYS DARK ─────────────────────────────── */
+/* The sidebar nav uses hardcoded #FFFFFF text, so the sidebar
+   background must always be dark regardless of the active theme.  */
+
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div,
+[data-testid="stSidebar"] > div > div {
+  background-color: #13151A !important;
 }
+
+/* Ensure all sidebar Streamlit text widgets are white */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] span {
+  color: #FFFFFF !important;
+}
+
+/* Search button in sidebar — force visible styling on secondary buttons */
+[data-testid="stSidebar"] button[kind="secondary"] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+[data-testid="stSidebar"] button[kind="secondary"]:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+
+/* ─── 3. LAYOUT HELPERS ─────────────────────────────────────── */
 
 .block-container {
-  padding: 0 32px 32px 32px !important;
+  padding: 64px 32px 32px 32px !important;
   max-width: 100% !important;
 }
 
-/* Smaller padding on mobile */
 @media (max-width: 991px) {
   .block-container,
   .main .block-container {
     padding-left: 12px !important;
     padding-right: 12px !important;
-    padding-top: 12px !important;
+    padding-top: 64px !important;
   }
 }
 
+
+/* ─── 4. GLOBAL LINK RESET ─────────────────────────────────── */
+/* Prevent browser default blue bleeding into cards/buttons      */
+
+a:has(.sc-matter-card),
+a:has(.sc-matter-card):visited,
+a:has(.sc-matter-card):hover,
+a:has(.sc-matter-card):active {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+a.sc-btn,
+a.sc-btn:visited,
+a.sc-btn:hover,
+a.sc-btn:active {
+  text-decoration: none !important;
+}
+
+
+/* ─── 5. PAGE TYPOGRAPHY ────────────────────────────────────── */
+
+.sc-page-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--sc-text);
+  margin: 0 0 4px 0;
+  font-family: var(--sc-font);
+  line-height: 1.2;
+}
+
+.sc-page-subtitle {
+  font-size: 14px;
+  color: var(--sc-text-muted);
+  margin: 0;
+  font-family: var(--sc-font);
+}
+
+
+/* ─── 6. PAGE HEADER LAYOUT ─────────────────────────────────── */
+
+.sc-main-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.sc-header-left { flex: 1; }
+
+.sc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+
+/* ─── 7. SURFACE / PANEL ─────────────────────────────────────── */
+
+.panel {
+  background: var(--sc-surface);    /* always dark #1A1D24 */
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  padding: 20px 24px;
+  font-family: var(--sc-font);
+}
+
+
+/* ─── 8. MATTER LIST CARDS ──────────────────────────────────── */
+
+.sc-matter-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--sc-surface);    /* always dark */
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  color: #FFFFFF !important;        /* reset link blue */
+}
+
+.sc-matter-card:hover {
+  border-color: var(--sc-accent);
+  box-shadow: 0 0 0 1px var(--sc-accent), 0 4px 16px rgba(75, 158, 255, 0.14);
+}
+
+/* All children inherit white from the card, not link blue */
+.sc-matter-card * { color: inherit; }
+
+.sc-card-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(75, 158, 255, 0.1);
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: var(--sc-accent);
+}
+
+.sc-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sc-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #FFFFFF;                   /* always white — on dark card */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-card-client {
+  font-size: 13px;
+  color: #C9CDD6;                   /* was #9BA1B0, raised for contrast */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9BA1B0;                   /* was #6B7280, raised for contrast */
+  flex-wrap: wrap;
+}
+
+.sc-meta-dot {
+  color: #525864;                   /* subtle separator */
+  font-size: 10px;
+}
+
+.sc-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.sc-card-time {
+  font-size: 12px;
+  color: #9BA1B0;                   /* was #6B7280, raised for contrast */
+}
+
+
+/* ─── 9. STATUS CHIPS ────────────────────────────────────────── */
+
+.sc-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.sc-status-active    { background: rgba(74, 222, 128, 0.15); color: #4ADE80; }
+.sc-status-review    { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+.sc-status-completed { background: rgba(75, 158, 255, 0.15); color: #4B9EFF; }
+.sc-status-archived  { background: rgba(156,163,175, 0.15); color: #C9CDD6; }
+.sc-status-on_hold   { background: rgba(239, 68, 68, 0.15);  color: #EF4444; }
+.sc-status-pending   { background: rgba(245, 158, 11, 0.12); color: #F59E0B; }
+.sc-status-draft     { background: rgba(75, 158, 255, 0.12); color: #76B5FF; }
+.sc-status-final     { background: rgba(74, 222, 128, 0.15); color: #4ADE80; }
+
+
+/* ─── 10. BUTTONS (anchor-based) ────────────────────────────── */
+
+.sc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: var(--sc-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--sc-font);
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.sc-btn-primary {
+  background: var(--sc-accent);
+  color: #FFFFFF !important;
+  border-color: var(--sc-accent);
+}
+.sc-btn-primary:hover {
+  background: var(--sc-accent-hover);
+  border-color: var(--sc-accent-hover);
+  box-shadow: 0 4px 14px rgba(75, 158, 255, 0.4);
+  color: #FFFFFF !important;
+}
+
+.sc-btn-secondary {
+  background: rgba(255, 255, 255, 0.07);
+  color: #C9CDD6 !important;
+  border-color: var(--sc-border);
+}
+.sc-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Light-mode secondary button */
+@media (prefers-color-scheme: light) {
+  .sc-btn-secondary               { background: rgba(0,0,0,0.06); color: #475569 !important; border-color: #CBD5E1; }
+  .sc-btn-secondary:hover         { background: rgba(0,0,0,0.11); color: #1E293B !important; border-color: #94A3B8; }
+}
+html.light .sc-btn-secondary,
+html[data-theme="light"] .sc-btn-secondary           { background: rgba(0,0,0,0.06); color: #475569 !important; border-color: #CBD5E1; }
+html.light .sc-btn-secondary:hover,
+html[data-theme="light"] .sc-btn-secondary:hover     { background: rgba(0,0,0,0.11); color: #1E293B !important; border-color: #94A3B8; }
+
+
+/* ─── 11. HEADING OVERRIDES (light-mode & dark-mode) ─────────── */
+/* matter_details.py embeds h2 with inline style="color:#FFFFFF".
+   In light mode, we flip them to dark via !important.
+   In dark mode (config default), inline white is correct.        */
+
+@media (prefers-color-scheme: light) {
+  [data-testid="stMarkdownContainer"] h2 { color: #1E293B !important; }
+  [data-testid="stMarkdownContainer"] h3 { color: #334155 !important; }
+}
+html.light [data-testid="stMarkdownContainer"] h2,
+html[data-theme="light"] [data-testid="stMarkdownContainer"] h2 { color: #1E293B !important; }
+html.light [data-testid="stMarkdownContainer"] h3,
+html[data-theme="light"] [data-testid="stMarkdownContainer"] h3 { color: #334155 !important; }
+
+
+/* ─── 12. SCROLLBAR ──────────────────────────────────────────── */
+
+::-webkit-scrollbar              { width: 6px; height: 6px; }
+::-webkit-scrollbar-track        { background: var(--sc-bg); }
+::-webkit-scrollbar-thumb        { background: var(--sc-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: #3D4350; }

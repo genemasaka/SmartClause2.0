@@ -411,43 +411,44 @@ def render_matter_details():
 </div>
 """, unsafe_allow_html=True)
     
-    # Action Links serving as buttons - styled exactly like "Back to Matters"
-    # Note: Using current URL + action
-    current_url_base = f"?view=matter_details&matter_id={matter_id}{session_param}"
+    st.markdown("<div style='margin-bottom: 24px;'></div>", unsafe_allow_html=True)
     
-    manage_access_btn = ""
+    # Render native Streamlit buttons to avoid full page reload
     if is_owner_admin or is_creator:
-        manage_access_btn = f"""
-  <a href="{current_url_base}&action=manage_access" target="_self" class="sc-btn sc-btn-secondary" style="min-width: 140px; text-decoration: none;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="9" cy="7" r="4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span>Manage Access</span>
-  </a>"""
-
-    st.markdown(f"""
-<div style="display: flex; gap: 12px; margin-bottom: 24px;">
-  <a href="{current_url_base}&action=edit_matter" target="_self" class="sc-btn sc-btn-secondary" style="min-width: 140px; text-decoration: none;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M18.5 2.5a2.121 2 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span>Edit Matter</span>
-  </a>{manage_access_btn}
-  <a href="{current_url_base}&action=new_document" target="_self" class="sc-btn sc-btn-primary" style="min-width: 140px; text-decoration: none;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <polyline points="14 2 14 8 20 8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <line x1="12" y1="18" x2="12" y2="12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <line x1="9" y1="15" x2="15" y2="15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span>New Document</span>
-  </a>
-</div>
-""", unsafe_allow_html=True)
+        bc1, bc2, bc3, _ = st.columns([1.2, 1.4, 1.4, 3])
+    else:
+        bc1, bc_doc, _ = st.columns([1.2, 1.4, 4.4])
+        bc3 = bc_doc  # alias for New Document
+        
+    with bc1:
+        if st.button("Edit Matter", icon=":material/edit:", use_container_width=True):
+            st.session_state["show_new_matter"] = False
+            st.session_state["show_search_modal"] = False
+            st.session_state["modal_mode"] = None
+            st.session_state["existing_matter_id"] = None
+            st.session_state["show_manage_access"] = False
+            st.session_state["show_edit_matter"] = True
+            st.rerun()
+            
+    if is_owner_admin or is_creator:
+        with bc2:
+            if st.button("Manage Access", icon=":material/group:", use_container_width=True):
+                st.session_state["show_edit_matter"] = False
+                st.session_state["show_new_matter"] = False
+                st.session_state["show_search_modal"] = False
+                st.session_state["modal_mode"] = None
+                st.session_state["show_manage_access"] = True
+                st.rerun()
+                
+    with bc3:
+        if st.button("New Document", icon=":material/note_add:", type="primary", use_container_width=True):
+            st.session_state["show_edit_matter"] = False
+            st.session_state["show_manage_access"] = False
+            st.session_state["show_new_matter"] = True
+            st.session_state["show_search_modal"] = False
+            st.session_state["modal_mode"] = "new_document"
+            st.session_state["existing_matter_id"] = matter_id
+            st.rerun()
     
     st.markdown('<div style="padding: 0; margin-top: 24px;">', unsafe_allow_html=True)
     
@@ -604,7 +605,7 @@ def render_matter_details():
       </div>
       <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
         <div style="font-size: 16px; font-weight: 600; color: #FFFFFF;">{doc.get("title", "Untitled Document")}</div>
-        <div style="font-size: 13px; color: #6B7280; display: flex; align-items: center; gap: 6px;">
+        <div style="font-size: 13px; color: #9BA1B0; display: flex; align-items: center; gap: 6px;">
           <span>{doc.get("document_type", "Document")}</span>
           {f'<span style="opacity: 0.5;">•</span><span>{doc.get("document_subtype")}</span>' if doc.get("document_subtype") else ""}
           <span style="opacity: 0.5;">•</span>
@@ -632,8 +633,8 @@ def render_matter_details():
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/>
     <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2"/>
   </svg>
-  <div style="font-size: 16px; color: #9BA1B0; margin-bottom: 8px;">No documents yet</div>
-  <div style="font-size: 14px; color: #6B7280; margin-bottom: 20px;">Create your first document for this matter</div>
+  <div style="font-size: 16px; color: #C9CDD6; margin-bottom: 8px;">No documents yet</div>
+  <div style="font-size: 14px; color: #9BA1B0; margin-bottom: 20px;">Create your first document for this matter</div>
 </div>
 """, unsafe_allow_html=True)
         
@@ -777,15 +778,15 @@ def render_matter_details():
             col1, col2 = st.columns([4, 1])
             with col1:
                 st.markdown(f"""
-                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid #252930; border-radius: 8px; margin-bottom: 8px;">
-                  <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(255, 255, 255, 0.05); flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--sc-surface); border: 1px solid var(--sc-border); border-radius: 8px; margin-bottom: 8px;">
+                  <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: rgba(255, 255, 255, 0.05); flex-shrink: 0; color: #FFFFFF;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" stroke-width="2"/>
                     </svg>
                   </div>
                   <div>
                     <div style="font-size: 14px; font-weight: 500; color: #FFFFFF;">{fdoc.get("title", "Untitled")}</div>
-                    <div style="font-size: 12px; color: #6B7280;">Uploaded {created_ago}</div>
+                    <div style="font-size: 12px; color: #9BA1B0;">Uploaded {created_ago}</div>
                   </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -814,7 +815,7 @@ def render_matter_details():
             activity_desc = activity_item.get("description", "Activity")
             
             st.markdown(f"""
-<div style="display: flex; align-items: start; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid #252930; border-radius: 8px; margin-bottom: 8px;">
+<div style="display: flex; align-items: start; gap: 12px; padding: 12px; background: var(--sc-surface); border: 1px solid var(--sc-border); border-radius: 8px; margin-bottom: 8px;">
   <div style="width: 8px; height: 8px; border-radius: 50%; background: #4B9EFF; margin-top: 6px; flex-shrink: 0;"></div>
   <div style="flex: 1;">
     <div style="font-size: 14px; color: #FFFFFF;">{activity_desc}</div>
@@ -824,8 +825,8 @@ def render_matter_details():
 """, unsafe_allow_html=True)
     else:
         st.markdown("""
-<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid #252930; border-radius: 8px; padding: 20px; text-align: center;">
-  <div style="font-size: 14px; color: #6B7280;">No recent activity</div>
+<div style="background: var(--sc-surface); border: 1px solid var(--sc-border); border-radius: 8px; padding: 20px; text-align: center;">
+  <div style="font-size: 14px; color: #9BA1B0;">No recent activity</div>
 </div>
 """, unsafe_allow_html=True)
     

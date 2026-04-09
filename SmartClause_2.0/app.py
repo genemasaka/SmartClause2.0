@@ -101,12 +101,15 @@ def local_css(file_name: str = "styles.css"):
     """
     Robustly resolves the path to the CSS file and injects it.
     Prevents pathing errors on VPS deployments.
+    Self-contained: imports os locally so it can be called early
+    in the script before any module-level 'import os' statements.
     """
+    import os as _local_os
     # 1. Get the absolute directory of the current Python script (app.py)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    current_dir = _local_os.path.dirname(_local_os.path.abspath(__file__))
     
     # 2. Construct the full absolute path to the CSS file
-    css_path = os.path.join(current_dir, file_name)
+    css_path = _local_os.path.join(current_dir, file_name)
 
     # 3. Read and inject
     try:
@@ -181,6 +184,12 @@ if _public_view in ("privacy", "terms"):
 # This now uses Supabase session recovery automatically
 # ============================================================================
 check_authentication()
+
+# ============================================================
+# INJECT STYLES - Must run right after auth so every authenticated
+# page load gets the full design system (sc-* classes, theme vars).
+# ============================================================
+local_css()
 
 # ============================================================================
 # PROACTIVE SESSION PERSISTENCE
@@ -429,9 +438,9 @@ if view != "generation_focus":
         # Robust sidebar styling with absolute positioned footer
         st.markdown("""
         <style>
-        /* Force sidebar to use relative positioning for absolute footer */
+        /* Force sidebar to act as containing block for fixed position descendants */
         [data-testid="stSidebar"] {
-            position: relative;
+            transform: translateZ(0);
         }
         
         /* Ensure sidebar content is scrollable with space for footer */
@@ -439,32 +448,24 @@ if view != "generation_focus":
             padding-bottom: 80px !important; /* Space for fixed footer */
         }
         
-        /* Sidebar footer - absolutely positioned at bottom */
+        /* Sidebar footer - fixed positioned but trapped within stSidebar */
         .sidebar-footer {
             position: fixed;
             bottom: 0;
             left: 0;
-            width: 256px;
+            width: 100%;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            background: #1E1E1E;
+            background: #13151A;
             z-index: 999;
             box-sizing: border-box;
         }
+        
+        /* Hide custom fixed footers when the sidebar is collapsed */
+        [data-testid="stSidebar"][aria-expanded="false"] .sidebar-footer,
+        [data-testid="stSidebar"][aria-expanded="false"] .logout-container {
+            display: none !important;
+        }
 
-        @media (max-width: 991px) {
-            .sidebar-footer {
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-        }
-        
-        /* Adjust for expanded sidebar - Desktop Only */
-        @media (min-width: 992px) {
-            [data-testid="stSidebar"][aria-expanded="true"] .sidebar-footer {
-                width: 256px;
-            }
-        }
-        
         .sidebar-footer-content {
             display: flex;
             align-items: center;
@@ -686,11 +687,11 @@ if view != "generation_focus":
         
         st.markdown(f"""
         <!-- Logout button: fixed just above the avatar footer -->
-        <div style="
+        <div class="logout-container" style="
             position: fixed;
             bottom: 65px;
             left: 0;
-            width: 250px;
+            width: 100%;
             padding: 0 16px 8px 16px;
             box-sizing: border-box;
             z-index: 999;
@@ -963,7 +964,7 @@ def render_matters():
         with col_menu:
             st.markdown('<div style="position: absolute; top: 50%; transform: translateY(-50%); z-index: 20; right: 32px;">', unsafe_allow_html=True)
             
-            with st.popover("⋮"):
+            with st.popover("\u200B"):
                 if st.button("Pin", key=f"pin_{m['id']}", use_container_width=True):
                     handle_pin_matter(m['id'])
                     st.rerun()

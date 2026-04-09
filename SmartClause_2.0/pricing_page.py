@@ -486,7 +486,7 @@ def render_payment_modal(payment_manager, user_id, org_name, subscription_mgr):
     
     with st.expander("Is there a free trial?"):
         st.markdown("""
-        Yes! New users get a 14-day trial with 10 free documents to explore SmartClause features.
+        Yes! New users get a 7-day trial with 7 free documents to explore SmartClause features.
         """)
 
 
