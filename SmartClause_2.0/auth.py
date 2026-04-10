@@ -410,6 +410,8 @@ def login_page():
             width: 100% !important;
             padding-top: calc(50vh - 210px) !important;
             display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
             justify-content: center !important;
         }
 
@@ -749,7 +751,7 @@ def login_page():
                 margin-bottom: 28px !important;
             }
             .auth-mobile-logo img {
-                width: 150px !important;
+                width: 220px !important;
                 height: auto !important;
             }
         }

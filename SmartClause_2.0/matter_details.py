@@ -5,6 +5,7 @@ from typing import Dict, Any
 import logging
 from error_helpers import show_error
 from organization_manager import get_user_role_from_org
+from matter_actions import handle_pin_matter, handle_archive_matter, handle_delete_matter
 
 
 def get_time_ago(dt: datetime) -> str:
@@ -415,9 +416,9 @@ def render_matter_details():
     
     # Render native Streamlit buttons to avoid full page reload
     if is_owner_admin or is_creator:
-        bc1, bc2, bc3, _ = st.columns([1.2, 1.4, 1.4, 3])
+        bc1, bc2, bc3, _, bc_menu = st.columns([1.2, 1.4, 1.4, 2.7, 0.3])
     else:
-        bc1, bc_doc, _ = st.columns([1.2, 1.4, 4.4])
+        bc1, bc_doc, _, bc_menu = st.columns([1.2, 1.4, 4.1, 0.3])
         bc3 = bc_doc  # alias for New Document
         
     with bc1:
@@ -449,6 +450,40 @@ def render_matter_details():
             st.session_state["modal_mode"] = "new_document"
             st.session_state["existing_matter_id"] = matter_id
             st.rerun()
+            
+    with bc_menu:
+        with st.popover("\u200B", use_container_width=True):
+            if st.button("Pin", key=f"md_pin_{matter_id}", use_container_width=True):
+                handle_pin_matter(matter_id)
+                st.rerun()
+            if st.button("Archive", key=f"md_archive_{matter_id}", use_container_width=True):
+                handle_archive_matter(matter_id)
+                st.rerun()
+            if st.button("Delete", key=f"md_delete_{matter_id}", use_container_width=True):
+                st.session_state[f"md_confirm_delete_{matter_id}"] = True
+                st.rerun()
+                
+    # Handle delete confirmation
+    if st.session_state.get(f"md_confirm_delete_{matter_id}", False):
+        @st.dialog("Confirm Deletion")
+        def delete_matter_dialog():
+            st.warning(f"Are you sure you want to delete '{matter['name']}'?")
+            del_col1, del_col2 = st.columns(2)
+            with del_col1:
+                if st.button("Yes, Delete", key=f"md_confirm_yes_{matter_id}", use_container_width=True, type="primary"):
+                    success = handle_delete_matter(matter_id)
+                    st.session_state[f"md_confirm_delete_{matter_id}"] = False
+                    if success:
+                        st.success(f"Deleted '{matter['name']}'")
+                        st.query_params["view"] = "matters"
+                        st.query_params.pop("matter_id", None)
+                        st.rerun()
+            with del_col2:
+                if st.button("Cancel", key=f"md_confirm_no_{matter_id}", use_container_width=True):
+                    st.session_state[f"md_confirm_delete_{matter_id}"] = False
+                    st.rerun()
+        
+        delete_matter_dialog()
     
     st.markdown('<div style="padding: 0; margin-top: 24px;">', unsafe_allow_html=True)
     

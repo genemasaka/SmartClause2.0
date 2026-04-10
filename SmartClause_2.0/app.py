@@ -927,12 +927,8 @@ def render_matters():
         updated = datetime.fromisoformat(m["updated_at"])
         time_ago = get_time_ago(updated)   
 
-        # Use Streamlit columns to position the menu button
-        col_card, col_menu = st.columns([20, 1])
-        
-        with col_card:
-            st.markdown(f"""
-    <a href="?view=matter_details&matter_id={m["id"]}{session_param}" target="_self" style="text-decoration: none; display: block; margin: 0 32px 12px 0;">
+        st.markdown(f"""
+    <a href="?view=matter_details&matter_id={m["id"]}{session_param}" target="_self" style="text-decoration: none; display: block; margin: 0 0 12px 0;">
     <div class="sc-matter-card" style="margin: 0;">
         <div class="sc-card-left">
         <div class="sc-card-icon">
@@ -960,42 +956,6 @@ def render_matters():
     </div>
     </a>
     """, unsafe_allow_html=True)
-        
-        with col_menu:
-            st.markdown('<div style="position: absolute; top: 50%; transform: translateY(-50%); z-index: 20; right: 32px;">', unsafe_allow_html=True)
-            
-            with st.popover("\u200B"):
-                if st.button("Pin", key=f"pin_{m['id']}", use_container_width=True):
-                    handle_pin_matter(m['id'])
-                    st.rerun()
-                
-                if st.button("Archive", key=f"archive_{m['id']}", use_container_width=True):
-                    handle_archive_matter(m['id'])
-                    st.rerun()
-                
-                if st.button("Delete", key=f"delete_{m['id']}", use_container_width=True):
-                    st.session_state[f"confirm_delete_{m['id']}"] = True
-                    st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Handle delete confirmation
-        if st.session_state.get(f"confirm_delete_{m['id']}", False):
-            st.warning(f"Are you sure you want to delete '{m['name']}'?")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("Yes, Delete", key=f"confirm_yes_{m['id']}", use_container_width=True, type="primary"):
-                    success = handle_delete_matter(m['id'])
-                    st.session_state[f"confirm_delete_{m['id']}"] = False
-                    if success:
-                        st.success(f"Deleted '{m['name']}'")
-                    st.rerun()
-            
-            with col2:
-                if st.button("Cancel", key=f"confirm_no_{m['id']}", use_container_width=True):
-                    st.session_state[f"confirm_delete_{m['id']}"] = False
-                    st.rerun()
 
 def get_time_ago(dt):
     """Helper to show relative time"""
