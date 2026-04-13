@@ -299,7 +299,7 @@ def login_page():
         st.session_state["auth_view"] = "login"
 
     
-    # Add custom CSS for the modern split-screen layout
+    # Add custom CSS for centered single-column auth layout
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&display=swap');
@@ -318,126 +318,89 @@ def login_page():
         }
         [data-testid="collapsedControl"] { display: none !important; }
 
-        /* ── RESET LAYOUT ───────────────────────────────────────────── */
+        /* ── FULL BLACK BACKGROUND ──────────────────────────────────── */
         body, .stApp, .appview-container,
-        [data-testid="stAppViewContainer"] {
-            margin: 0 !important; padding: 0 !important;
-            width: 100vw !important; max-width: 100vw !important;
-            background: transparent !important;
-            overflow-x: hidden !important;
-        }
+        [data-testid="stAppViewContainer"],
         section.main, section[data-testid="stMain"],
-        div.appview-container > section.main {
-            margin-left: 0 !important;
-            width: 100vw !important; max-width: 100vw !important;
-        }
-        .main {
-            background: transparent !important;
-            padding: 0 !important; margin: 0 !important;
+        div.appview-container > section.main,
+        .main, [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"] {
+            margin: 0 !important; padding: 0 !important;
+            background: #000000 !important;
+            overflow-x: hidden !important;
         }
         .block-container {
             padding: 0 !important; margin: 0 !important;
             max-width: 100% !important; width: 100% !important;
         }
 
-        /* ── SPLIT BACKGROUNDS ──────────────────────────────────────── */
-        .auth-bg-left {
-            position: fixed; top: 0; left: 0;
-            width: 62vw; height: 100vh; z-index: 0;
-            background: #1a6fd4 !important; /* Professional solid blue */
-        }
-        /* Subtle grid overlay for texture */
-        .auth-bg-left::before {
-            content: '';
-            position: absolute; inset: 0;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
-            background-size: 48px 48px;
-        }
-        /* Soft orb accents */
-        .auth-bg-left::after {
-            content: '';
-            position: absolute;
-            width: 520px; height: 520px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
-            bottom: -120px; left: -80px;
-        }
-        .auth-bg-right {
-            position: fixed; top: 0; right: 0;
-            width: 38vw; height: 100vh; z-index: 0;
-            background: #000000;
-        }
-
-        /* ── COLUMN LAYOUT ──────────────────────────────────────────── */
-        [data-testid="column"] {
+        /* ── CENTERED SINGLE-COLUMN LAYOUT ─────────────────────────── */
+        [data-testid="stHorizontalBlock"] {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            padding: 0 !important; margin: 0 !important; gap: 0 !important;
             display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            height: 100vh !important;
-            z-index: 1;
-        }
-        /* Left: brand panel — fills its flex share, scrollable if content overflows */
-        [data-testid="column"]:nth-of-type(1) {
-            align-items: flex-start !important;
-            justify-content: flex-start !important;
-            flex: 16 !important;
-            overflow: hidden !important;
-        }
-        /* Propagate height through left column Streamlit wrappers */
-        html body [data-testid="column"]:nth-of-type(1) > div,
-        html body [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlockBorderWrapper"],
-        html body [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
-            height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-        }
-        /* Right Column (Form Column) styling */
-        [data-testid="column"]:nth-of-type(2) {
-            padding-right: 0 !important;
-            padding-left: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: stretch !important;
-            justify-content: center !important;
-            background: #000 !important;
-        }
-
-        /* FORM WRAPPER — viewport-relative padding to visually center form */
-        .auth-form-wrapper {
-            width: 100% !important;
-            padding-top: calc(50vh - 210px) !important;
-            display: flex !important;
-            flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
         }
 
-        /* ── 60% WIDTH INNER FORM CONTAINER ────────────────────────────
-           This div wraps all form content and constrains it to 60% of
-           the right column. All Streamlit elements inside inherit this
-           width via width:100% on their own containers.               */
-        .auth-form-inner {
-            width: 60% !important;
-            min-width: 260px !important;
-            max-width: 400px !important;
-            flex-shrink: 0;
+        [data-testid="column"] {
+            padding: 0 !important; margin: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            z-index: 1;
+            background: #000000 !important;
         }
 
-        /* ── PROPAGATE HEIGHT THROUGH STREAMLIT'S INTERNAL WRAPPERS ─────
-           The right column has height:100vh and justify-content:center,
-           but Streamlit's stVerticalBlockBorderWrapper and stVerticalBlock
-           are height:auto by default, so centering has no effect.
-           Force height:100% + flex all the way down the chain.          */
-        html body [data-testid="column"]:nth-of-type(2) > div,
-        html body [data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlockBorderWrapper"],
-        html body [data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlock"] {
+        html body [data-testid="column"] > div,
+        html body [data-testid="column"] [data-testid="stVerticalBlockBorderWrapper"],
+        html body [data-testid="column"] [data-testid="stVerticalBlock"] {
             height: 100% !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
+            align-items: center !important;
+            width: 100% !important;
+        }
+
+        /* FORM WRAPPER — centered */
+        .auth-form-wrapper {
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 40px 20px !important;
+        }
+
+        /* Logo centered above form */
+        .auth-center-logo {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        .auth-center-logo img {
+            width: 200px;
+            height: auto;
+            display: block;
+        }
+        .auth-center-logo-fallback {
+            font-size: 24px; font-weight: 800;
+            color: #fff; letter-spacing: -0.02em;
+        }
+
+        /* ── INNER FORM CONTAINER ───────────────────────────────────── */
+        .auth-form-inner {
+            width: 400px !important;
+            max-width: 90vw !important;
+            min-width: 260px !important;
+            max-width: 400px !important;
+            flex-shrink: 0;
         }
 
         /* Force all form elements inside .auth-form-inner to fill their container */
@@ -480,130 +443,7 @@ def login_page():
             box-shadow: none !important;
         }
 
-        /* ── BRAND PANEL ────────────────────────────────────────────── */
-        .auth-brand-panel {
-            padding: 48px 64px 40px 64px;
-            max-width: 58vw !important;
-            animation: fadeSlideUp 0.7s ease both;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            height: 100%;
-            box-sizing: border-box;
-            overflow-y: auto;
-            overflow-x: hidden;
-            scrollbar-width: none; /* Firefox */
-        }
-        .auth-brand-panel::-webkit-scrollbar { display: none; } /* Chrome/Safari */
-        .auth-brand-logo {
-            margin-bottom: 40px;
-        }
-        .auth-brand-logo img {
-            width: 180px; height: auto; display: block;
-            filter: drop-shadow(0 2px 16px rgba(0,0,0,0.18));
-        }
-        .auth-brand-logo-fallback {
-            font-size: 22px; font-weight: 800;
-            color: #fff; margin-bottom: 20px; letter-spacing: -0.02em;
-        }
-        .auth-brand-headline {
-            font-family: 'Hanken Grotesk', sans-serif !important;
-            font-size: clamp(48px, 6vw, 84px);
-            font-weight: 800; line-height: 0.95;
-            color: #ffffff;
-            letter-spacing: -0.02em;
-            margin-bottom: 16px;
-            max-width: 800px;
-            text-shadow: 0 2px 20px rgba(0,0,0,0.12);
-        }
-        .auth-brand-headline em {
-            font-style: normal;
-            background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0.75) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .auth-brand-sub {
-            font-size: 16px; line-height: 1.6;
-            color: rgba(255,255,255,0.85);
-            margin-bottom: 20px;
-            max-width: 650px;
-        }
-        /* Feature items */
-        .auth-features {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 0;
-        }
-        .auth-feature-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: rgba(255,255,255,0.88);
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .auth-feature-icon {
-            width: 24px; height: 24px;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
-            color: rgba(255,255,255,0.95);
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
-        /* Dual Testimonials Grid — adjacent layout within column */
-        .auth-testimonials-grid {
-            margin-top: 20px;
-            margin-bottom: 40px;
-            display: flex;
-            gap: 14px;
-            flex-direction: row;
-            flex-wrap: wrap;
-            width: 100%;
-            justify-content: flex-start;
-            align-items: stretch;
-        }
-        /* Testimonial card */
-        .auth-testimonial {
-            flex: 1; /* Equal width cards */
-            min-width: 280px; /* Prevent too much squishing */
-            max-width: 48%; /* Keep within half column width roughly */
-            padding: 24px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 16px;
-            backdrop-filter: blur(12px);
-            transition: transform 0.3s ease;
-            
-        }
-        .auth-testimonial:hover {
-            transform: translateY(-4px);
-            background: rgba(255,255,255,0.14);
-        }
-        .auth-testimonial-quote {
-            font-size: 14px; line-height: 1.6;
-            color: rgba(255,255,255,0.9);
-            font-style: italic; margin-bottom: 12px;
-        }
-        .auth-testimonial-author {
-            display: flex; align-items: center; gap: 10px;
-        }
-        .auth-testimonial-avatar {
-            width: 30px; height: 30px; border-radius: 50%;
-            background: rgba(255,255,255,0.25);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700; color: white;
-        }
-        .auth-testimonial-name {
-            font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);
-        }
-        .auth-testimonial-role {
-            font-size: 12px; color: rgba(255,255,255,0.6);
-        }
-
-        /* ── AUTH FORM (RIGHT PANEL) ────────────────────────────────── */
+        /* ── AUTH FORM ──────────────────────────────────────────────── */
         .auth-logo {
             width: 52px; height: 52px; border-radius: 12px;
             background: linear-gradient(135deg, #4B9EFF 0%, #3B7DD1 100%);
@@ -737,109 +577,43 @@ def login_page():
             50%       { opacity: 0.3; }
         }
 
-        /* ── MOBILE AUTH LOGO ──────────────────────────────────────── */
-        /* Hidden on desktop (logo appears in left brand panel) */
-        .auth-mobile-logo {
-            display: none;
-        }
-        /* Show logo centered above form on mobile */
+        /* ── MOBILE RESPONSIVE ──────────────────────────────────────── */
         @media (max-width: 991px) {
-            .auth-mobile-logo {
-                display: flex !important;
-                justify-content: center !important;
-                width: 100% !important;
-                margin-bottom: 28px !important;
-            }
-            .auth-mobile-logo img {
-                width: 220px !important;
-                height: auto !important;
-            }
-        }
-
-
-        /* ── RESPONSIVE OVERRIDES (MOBILE) ─────────────────────────── */
-        @media (max-width: 991px) {
-            /* Show branding section on mobile by stacking it above the form */
-            .auth-bg-left, .auth-brand-panel {
-                display: block !important;
-                position: relative !important;
-                width: 100% !important;
-                height: auto !important;
-                max-width: 100% !important;
-                padding: 40px 24px 20px 24px !important;
-            }
-            .auth-bg-left {
-                position: absolute !important;
-                z-index: 0;
-            }
-            
-            .auth-bg-right {
-                position: relative !important;
-                top: auto; left: auto;
-                width: 100vw !important;
-                height: auto !important;
-                min-height: auto !important;
-                background: #000000 !important;
-            }
-
             [data-testid="stHorizontalBlock"] {
                 position: relative !important;
-                display: block !important;
+                display: flex !important;
                 width: 100vw !important;
-                height: auto !important;
                 min-height: 100vh !important;
+                height: auto !important;
                 overflow-y: auto !important;
+                align-items: center !important;
+                justify-content: center !important;
             }
-
             [data-testid="column"] {
                 width: 100% !important;
                 min-width: 100% !important;
                 height: auto !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: flex-start !important;
-            }
-
-            /* Branding column (1st) comes first */
-            [data-testid="column"]:nth-of-type(1) {
-                display: block !important;
-                height: auto !important;
-                min-height: auto !important;
-            }
-
-            /* Form column (2nd) comes after */
-            [data-testid="column"]:nth-of-type(2) {
-                background: transparent !important;
+                min-height: 100vh !important;
                 padding: 0 24px 64px 24px !important;
-                height: auto !important;
-                min-height: auto !important;
             }
-
             .auth-form-wrapper {
-                padding-top: 20px !important;
-                height: auto !important;
+                padding: 40px 0 !important;
             }
             .auth-form-inner {
                 width: 100% !important;
                 max-width: 400px !important;
             }
-            
-            /* Hide mobile logo since we now show the main branding panel */
-            .auth-mobile-logo {
-                display: none !important;
-            }
         }
     </style>
 
-    <!-- JS: force right column internals to flex-center vertically -->
+    <!-- JS: force column internals to flex-center vertically -->
     <script>
     (function centerAuthForm() {
         function applyCenter() {
             var cols = document.querySelectorAll('[data-testid="column"]');
-            if (cols.length < 2) return;
-            var rightCol = cols[cols.length - 1];
-            // Walk every div child and make them stretch to full height
-            var wrappers = rightCol.querySelectorAll(
+            if (cols.length < 1) return;
+            var col = cols[0];
+            var wrappers = col.querySelectorAll(
                 '[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stVerticalBlock"]'
             );
             wrappers.forEach(function(el) {
@@ -847,129 +621,41 @@ def login_page():
                 el.style.setProperty('display', 'flex', 'important');
                 el.style.setProperty('flex-direction', 'column', 'important');
                 el.style.setProperty('justify-content', 'center', 'important');
+                el.style.setProperty('align-items', 'center', 'important');
             });
-            // Also apply to the direct div child of the right column
-            var directChild = rightCol.firstElementChild;
+            var directChild = col.firstElementChild;
             if (directChild) {
                 directChild.style.setProperty('height', '100%', 'important');
                 directChild.style.setProperty('display', 'flex', 'important');
                 directChild.style.setProperty('flex-direction', 'column', 'important');
                 directChild.style.setProperty('justify-content', 'center', 'important');
+                directChild.style.setProperty('align-items', 'center', 'important');
             }
         }
-        // Run immediately and after Streamlit re-renders
         applyCenter();
         document.addEventListener('DOMContentLoaded', applyCenter);
         window.addEventListener('load', applyCenter);
-        // Poll briefly to catch Streamlit lazy renders
         var tries = 0;
         var iv = setInterval(function() {
             applyCenter();
             tries++;
             if (tries > 20) clearInterval(iv);
         }, 200);
-        // Also watch for DOM mutations (Streamlit re-renders)
         if (window.MutationObserver) {
             var mo = new MutationObserver(function() { applyCenter(); });
             mo.observe(document.body, { childList: true, subtree: true });
         }
     })();
     </script>
-
-    <!-- FIXED SPLIT BACKGROUNDS -->
-    <div class="auth-bg-left"></div>
-    <div class="auth-bg-right"></div>
     """, unsafe_allow_html=True)
     
-    # Use columns for side-by-side layout
-    # Col 1: Brand (16)
-    # Col 2: Form (9)
+    # Single centered column layout
     with st.container():
-        left_col, right_col = st.columns([16, 9], gap="small")
-    
-    # Left column - Brand content
-    with left_col:
-        # Load logo for brand panel
-        try:
-            import base64 as _b64l
-            import os as _osl
-            _lp = "assets/sidebar_logo.png"
-            if _osl.path.exists(_lp):
-                with open(_lp, "rb") as _lf:
-                    _ld = _b64l.b64encode(_lf.read()).decode("utf-8")
-                _logo_html = f'<div class="auth-brand-logo"><img src="data:image/png;base64,{_ld}" alt="SmartClause"></div>'
-            else:
-                _logo_html = '<div class="auth-brand-logo-fallback">SmartClause</div>'
-        except Exception:
-            _logo_html = '<div class="auth-brand-logo-fallback">SmartClause</div>'
+        _, center_col, _ = st.columns([3, 4, 3])
 
-        st.markdown(f"""
-        <div class="auth-brand-panel">
-            {_logo_html}
-            <div class="auth-brand-headline">
-                Draft smarter.<br><em>Close faster.</em>
-            </div>
-            <div class="auth-brand-sub">
-                From complex commercial agreements to affidavits — SmartClause helps legal teams draft with speed, precision, and confidence.
-            </div>
-            <div class="auth-features">
-                <div class="auth-feature-item">
-                    <div class="auth-feature-icon">
-                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M9 17.5H3.5M6.5 12H2M9 6.5H4M17 3L10.4036 12.235C10.1116 12.6438 9.96562 12.8481 9.97194 13.0185C9.97744 13.1669 10.0486 13.3051 10.1661 13.3958C10.3011 13.5 10.5522 13.5 11.0546 13.5H16L15 21L21.5964 11.765C21.8884 11.3562 22.0344 11.1519 22.0281 10.9815C22.0226 10.8331 21.9514 10.6949 21.8339 10.6042C21.6989 10.5 21.4478 10.5 20.9454 10.5H16L17 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <div class="auth-feature-text">Generate complete documents in seconds</div>
-                </div>
-                <div class="auth-feature-item">
-                    <div class="auth-feature-icon">
-                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M2 12.0001L11.6422 16.8212C11.7734 16.8868 11.839 16.9196 11.9078 16.9325C11.9687 16.9439 12.0313 16.9439 12.0922 16.9325C12.161 16.9196 12.2266 16.8868 12.3578 16.8212L22 12.0001M2 17.0001L11.6422 21.8212C11.7734 21.8868 11.839 21.9196 11.9078 21.9325C11.9687 21.9439 12.0313 21.9439 12.0922 21.9325C12.161 21.9196 12.2266 21.8868 12.3578 21.8212L22 17.0001M2 7.00006L11.6422 2.17895C11.7734 2.11336 11.839 2.08056 11.9078 2.06766C11.9687 2.05622 12.0313 2.05622 12.0922 2.06766C12.161 2.08056 12.2266 2.11336 12.3578 2.17895L22 7.00006L12.3578 11.8212C12.2266 11.8868 12.161 11.9196 12.0922 11.9325C12.0313 11.9439 11.9687 11.9439 11.9078 11.9325C11.839 11.9196 11.7734 11.8868 11.6422 11.8212L2 7.00006Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <div class="auth-feature-text">Clause library built for legal professionals</div>
-                </div>
-                <div class="auth-feature-item">
-                    <div class="auth-feature-icon">
-                        <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M17 11V8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8V11M8.8 21H15.2C16.8802 21 17.7202 21 18.362 20.673C18.9265 20.3854 19.3854 19.9265 19.673 19.362C20 18.7202 20 17.8802 20 16.2V15.8C20 14.1198 20 13.2798 19.673 12.638C19.3854 12.0735 18.9265 11.6146 18.362 11.327C17.7202 11 16.8802 11 15.2 11H8.8C7.11984 11 6.27976 11 5.63803 11.327C5.07354 11.6146 4.6146 12.0735 4.32698 12.638C4 13.2798 4 14.1198 4 15.8V16.2C4 17.8802 4 18.7202 4.32698 19.362C4.6146 19.9265 5.07354 20.3854 5.63803 20.673C6.27976 21 7.11984 21 8.8 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <div class="auth-feature-text">Secure, compliant document management</div>
-                </div>
-            </div>
-            <div class="auth-testimonials-grid">
-                <div class="auth-testimonial">
-                    <div class="auth-testimonial-quote">
-                        "SmartClause cut our contract drafting time in half. It's become indispensable for our entire legal team."
-                    </div>
-                    <div class="auth-testimonial-author">
-                        <div class="auth-testimonial-avatar">SR</div>
-                        <div>
-                            <div class="auth-testimonial-name">Sarah R.</div>
-                            <div class="auth-testimonial-role">General Counsel, Tech Co</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="auth-testimonial">
-                    <div class="auth-testimonial-quote">
-                        "The clause library transformed how we manage templates. Security and speed are now at the heart of our workflow."
-                    </div>
-                    <div class="auth-testimonial-author">
-                        <div class="auth-testimonial-avatar">MK</div>
-                        <div>
-                            <div class="auth-testimonial-name">Michael K.</div>
-                            <div class="auth-testimonial-role">Partner, Legal Firm</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Right column - Form
-    with right_col:
-        # Build mobile logo HTML (shown above form on small screens via CSS)
+    # Single column - Logo + Form centered
+    with center_col:
+        # Load logo
         try:
             import base64 as _b64r
             import os as _osr
@@ -977,13 +663,13 @@ def login_page():
             if _osr.path.exists(_lp_r):
                 with open(_lp_r, "rb") as _lf_r:
                     _ld_r = _b64r.b64encode(_lf_r.read()).decode("utf-8")
-                _mobile_logo_html = f'<div class="auth-mobile-logo"><img src="data:image/png;base64,{_ld_r}" alt="SmartClause"></div>'
+                _logo_html = f'<div class="auth-center-logo"><img src="data:image/png;base64,{_ld_r}" alt="SmartClause"></div>'
             else:
-                _mobile_logo_html = '<div class="auth-mobile-logo" style="display:none;font-size:20px;font-weight:800;color:#fff;justify-content:center;margin-bottom:24px;">SmartClause</div>'
+                _logo_html = '<div class="auth-center-logo"><div class="auth-center-logo-fallback">SmartClause</div></div>'
         except Exception:
-            _mobile_logo_html = '<div class="auth-mobile-logo" style="display:none;font-size:20px;font-weight:800;color:#fff;justify-content:center;margin-bottom:24px;">SmartClause</div>'
+            _logo_html = '<div class="auth-center-logo"><div class="auth-center-logo-fallback">SmartClause</div></div>'
 
-        st.markdown(f'<div class="auth-form-wrapper">{_mobile_logo_html}<div class="auth-form-inner">', unsafe_allow_html=True)
+        st.markdown(f'<div class="auth-form-wrapper">{_logo_html}<div class="auth-form-inner">', unsafe_allow_html=True)
         
         if st.session_state["auth_view"] == "login":
             st.markdown("""
