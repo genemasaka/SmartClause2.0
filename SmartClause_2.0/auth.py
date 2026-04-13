@@ -756,17 +756,29 @@ def login_page():
             }
         }
 
+
         /* ── RESPONSIVE OVERRIDES (MOBILE) ─────────────────────────── */
         @media (max-width: 991px) {
-            /* Hide the blueprint brand section entirely on mobile to keep it clean */
+            /* Show branding section on mobile by stacking it above the form */
             .auth-bg-left, .auth-brand-panel {
-                display: none !important;
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                height: auto !important;
+                max-width: 100% !important;
+                padding: 40px 24px 20px 24px !important;
             }
+            .auth-bg-left {
+                position: absolute !important;
+                z-index: 0;
+            }
+            
             .auth-bg-right {
-                position: fixed !important;
-                top: 0; left: 0;
+                position: relative !important;
+                top: auto; left: auto;
                 width: 100vw !important;
-                height: 100vh !important;
+                height: auto !important;
+                min-height: auto !important;
                 background: #000000 !important;
             }
 
@@ -774,7 +786,8 @@ def login_page():
                 position: relative !important;
                 display: block !important;
                 width: 100vw !important;
-                height: 100vh !important;
+                height: auto !important;
+                min-height: 100vh !important;
                 overflow-y: auto !important;
             }
 
@@ -782,30 +795,38 @@ def login_page():
                 width: 100% !important;
                 min-width: 100% !important;
                 height: auto !important;
-                min-height: 100vh !important;
                 display: flex !important;
                 align-items: center !important;
-                justify-content: center !important;
+                justify-content: flex-start !important;
             }
 
-            /* Hide the first column (blueprint) on mobile */
+            /* Branding column (1st) comes first */
             [data-testid="column"]:nth-of-type(1) {
-                display: none !important;
+                display: block !important;
+                height: auto !important;
+                min-height: auto !important;
             }
 
-            /* Make the form column fill the screen */
+            /* Form column (2nd) comes after */
             [data-testid="column"]:nth-of-type(2) {
                 background: transparent !important;
-                padding: 24px !important;
+                padding: 0 24px 64px 24px !important;
+                height: auto !important;
+                min-height: auto !important;
             }
 
             .auth-form-wrapper {
-                padding-top: 0 !important;
+                padding-top: 20px !important;
                 height: auto !important;
             }
             .auth-form-inner {
-                width: 90% !important;
-                max-width: 360px !important;
+                width: 100% !important;
+                max-width: 400px !important;
+            }
+            
+            /* Hide mobile logo since we now show the main branding panel */
+            .auth-mobile-logo {
+                display: none !important;
             }
         }
     </style>
@@ -1332,7 +1353,168 @@ def login_page():
 
 
 
+
+
+def landing_page():
+    """Render a premium, minimalist landing page with a hero image."""
+    
+    # Hero Image & Logo B64
+    hero_b64 = ""
+    logo_b64 = ""
+    try:
+        import base64
+        import os
+        # Robust path resolution
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        hero_path = os.path.join(current_dir, "assets", "lawyer_hero.png")
+        logo_path = os.path.join(current_dir, "assets", "logo.png")
+        
+        if os.path.exists(hero_path):
+            with open(hero_path, "rb") as f:
+                hero_b64 = base64.b64encode(f.read()).decode()
+        
+        if os.path.exists(logo_path):
+            with open(logo_path, "rb") as f:
+                logo_b64 = base64.b64encode(f.read()).decode()
+    except Exception as e:
+        logger.error(f"Error loading landing page assets: {e}")
+
+    # Consolidate ALL landing page HTML and CSS into a single block to avoid Streamlit wrapping issues
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&display=swap');
+
+        /* Reset and Hide Streamlit chrome */
+        #MainMenu, header, footer {{ visibility: hidden !important; }}
+        [data-testid="stToolbar"], [data-testid="stDecoration"] {{ display: none !important; }}
+
+        .lp-root {{
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; background: #000; overflow: hidden; z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }}
+
+        /* Force parent containers to yield all space */
+        [data-testid="stAppViewContainer"], [data-testid="stApp"], .stApp, .block-container {{
+            padding: 0 !important; margin: 0 !important;
+        }}
+
+        .lp-content {{
+            flex: 1; padding: 6vw; display: flex; flex-direction: column;
+            justify-content: center; background: #000; color: #fff;
+            animation: lpFadeIn 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }}
+
+        .lp-logo {{ margin-bottom: 48px; }}
+        .lp-logo img {{ width: 200px; height: auto; display: block; }}
+
+        .lp-headline {{
+            font-family: 'Hanken Grotesk', sans-serif !important;
+            font-size: clamp(40px, 5.5vw, 80px);
+            font-weight: 800; line-height: 1.05;
+            letter-spacing: -0.03em; margin-bottom: 24px;
+            color: #FFFFFF;
+        }}
+
+        .lp-subtext {{
+            font-size: 18px; line-height: 1.6; color: rgba(255,255,255,0.65);
+            max-width: 480px; margin-bottom: 56px;
+        }}
+
+        /* Premium CTA Button */
+        .lp-cta-btn {{
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 18px 40px; background: #4B9EFF; color: #FFFFFF !important;
+            text-decoration: none !important; border-radius: 14px;
+            font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            width: fit-content;
+            box-shadow: 0 4px 14px rgba(75, 158, 255, 0.25);
+        }}
+        
+        .lp-cta-btn:hover {{
+            background: #5BABFF;
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 30px rgba(75, 158, 255, 0.45);
+        }}
+
+        .lp-hero-container {{
+            flex: 1.1; position: relative; background: #080808; overflow: hidden;
+        }}
+
+        .lp-hero-img {{
+            width: 100%; height: 100%; object-fit: cover;
+            filter: brightness(0.9) contrast(1.05);
+            animation: lpKenBurns 30s infinite alternate;
+        }}
+
+        /* Gradient Overlay for minimalist blending */
+        .lp-hero-container::after {{
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, #000 0%, rgba(0,0,0,0.4) 15%, transparent 40%);
+        }}
+
+        @keyframes lpFadeIn {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        @keyframes lpKenBurns {{
+            from {{ transform: scale(1); }}
+            to {{ transform: scale(1.15); }}
+        }}
+
+        /* Responsive */
+        @media (max-width: 991px) {{
+            .lp-root {{ 
+                flex-direction: column; 
+                overflow-y: auto; 
+                position: fixed; /* Stay fixed to cover entire viewport */
+                height: 100vh;
+                width: 100vw;
+            }}
+            .lp-hero-container {{ 
+                height: 50vh; 
+                flex: none; 
+                order: 1; 
+                width: 100%;
+            }}
+            /* Invert gradient for mobile stacking */
+            .lp-hero-container::after {{ 
+                background: linear-gradient(0deg, #000 0%, rgba(0,0,0,0.5) 20%, transparent 60%); 
+            }}
+            .lp-content {{ 
+                order: 2; 
+                padding: 40px 24px 100px 24px; 
+                flex: none; 
+                width: 100%;
+                box-sizing: border-box;
+            }}
+            .lp-headline {{ font-size: 38px; }}
+            .lp-cta-btn {{ width: 100%; box-sizing: border-box; }}
+        }}
+    </style>
+
+    <div class="lp-root">
+        <div class="lp-content">
+            <div class="lp-logo">
+                <img src="data:image/png;base64,{logo_b64}" alt="SmartClause">
+            </div>
+            <h1 class="lp-headline">Draft smarter. <br>Close faster.</h1>
+            <p class="lp-subtext">From complex commercial agreements to affidavits &mdash; SmartClause is the Legal Drafting Engine that helps legal teams draft with speed, precision, and confidence.</p>
+            <a href="/?show_auth=true" class="lp-cta-btn" target="_self">Get Started</a>
+        </div>
+        <div class="lp-hero-container"> 
+            <img src="data:image/png;base64,{hero_b64}" class="lp-hero-img" alt="SmartClause Hero">
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+
 def check_authentication():
+
+
     """
     Check if user is authenticated with true persistence.
     Uses query param-based session cookies that survive navigation.
@@ -1357,8 +1539,15 @@ def check_authentication():
     if restore_session_from_cookie():
         return True
     
-    # No valid session - show login
-    login_page()
+    # Check for direct auth trigger from landing page
+    if st.query_params.get("show_auth") == "true":
+        st.session_state["show_auth_form"] = True
+
+    # No valid session - show landing page or login
+    if st.session_state.get("show_auth_form"):
+        login_page()
+    else:
+        landing_page()
     st.stop()
 
 

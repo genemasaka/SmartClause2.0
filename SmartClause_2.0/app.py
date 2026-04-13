@@ -38,6 +38,13 @@ st.markdown(
         <meta property="og:title" content="SmartClause | AI-Powered Legal Drafting">
         <meta property="og:description" content="Empowering Kenyan Advocates with automated drafting precision.">
         <meta property="og:image" content="https://smartclause.net/assets/smartclause_badge.png">
+        <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "wamp8pdha3");
+        </script>
     </head>
     <noscript>
         <h1>SmartClause: Legal Drafting for Kenyan Advocates</h1>
