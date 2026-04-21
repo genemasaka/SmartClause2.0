@@ -7,6 +7,23 @@ from error_helpers import show_error
 import json
 from analytics import Analytics
 
+
+st.markdown(
+    """
+    <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-197JT7ZFHD"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-197JT7ZFHD');
+    </script>
+    </head>
+    """,
+    unsafe_allow_html=True
+)
 def render_clause_library():
     """Enhanced clause library with full CRUD operations."""
     db = DatabaseManager()

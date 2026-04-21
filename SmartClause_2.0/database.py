@@ -1451,7 +1451,7 @@ class DatabaseManager:
 
     def create_payment_transaction(
         self,
-        user_id: str,
+        user_id: Optional[str],
         amount: float,
         transaction_type: str,
         checkout_request_id: str,
@@ -1459,12 +1459,20 @@ class DatabaseManager:
         credits_purchased: int = 0,
         organization_id: Optional[str] = None,
         seats: Optional[int] = None,
-        tier: Optional[str] = None
+        tier: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Record a new payment transaction."""
         try:
+            tx_metadata = {
+                "organization_id": organization_id,
+                "seats": seats,
+                "tier": tier
+            }
+            if metadata:
+                tx_metadata.update(metadata)
+
             data = {
-                "user_id": user_id,
                 "amount": amount,
                 "transaction_type": transaction_type,
                 "checkout_request_id": checkout_request_id,
@@ -1474,12 +1482,10 @@ class DatabaseManager:
                 "payment_method": "mpesa",
                 "transaction_date": datetime.now().isoformat(),
                 "verification_attempts": 0,
-                "metadata": {
-                    "organization_id": organization_id,
-                    "seats": seats,
-                    "tier": tier
-                }
+                "metadata": tx_metadata
             }
+            if user_id:
+                data["user_id"] = user_id
             result = self.client.table("payment_transactions").insert(data).execute()
 
             if not result.data:

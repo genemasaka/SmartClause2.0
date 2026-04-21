@@ -15,6 +15,22 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+st.markdown(
+    """
+    <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-197JT7ZFHD"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-197JT7ZFHD');
+    </script>
+    </head>
+    """,
+    unsafe_allow_html=True
+)
 # Initialize Analytics
 def get_analytics():
     return Analytics()
@@ -1188,7 +1204,10 @@ def landing_page():
             </div>
             <h1 class="lp-headline">Draft smarter. <br>Close faster.</h1>
             <p class="lp-subtext">From complex commercial agreements to affidavits &mdash; SmartClause is the Legal Drafting Engine that helps legal teams draft with speed, precision, and confidence.</p>
-            <a href="/?show_auth=true" class="lp-cta-btn" target="_self">Get Started</a>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <a href="/?show_auth=true" class="lp-cta-btn" target="_self">Get Started</a>
+                <a href="/?public_flow=one_time" class="lp-cta-btn" style="background:#111;border:1px solid #2A2A2A;box-shadow:none;" target="_self">One-Time Document</a>
+            </div>
         </div>
         <div class="lp-hero-container"> 
             <img src="data:image/png;base64,{hero_b64}" class="lp-hero-img" alt="SmartClause Hero">
@@ -1215,6 +1234,12 @@ def check_authentication():
 
     if sc_type == "recovery" and sc_token:
         login_page()
+        st.stop()
+
+    # Allow one-time guest flow without auth.
+    if st.query_params.get("public_flow") == "one_time":
+        from one_time_flow import render_one_time_flow
+        render_one_time_flow()
         st.stop()
 
     # Check if already authenticated in this session

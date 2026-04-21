@@ -45,6 +45,15 @@ st.markdown(
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
         })(window, document, "clarity", "script", "wamp8pdha3");
         </script>
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-197JT7ZFHD"></script>
+        <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-197JT7ZFHD');
+        </script>
     </head>
     <noscript>
         <h1>SmartClause: Legal Drafting for Kenyan Advocates</h1>

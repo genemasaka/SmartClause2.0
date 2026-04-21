@@ -7,7 +7,22 @@ from error_helpers import show_error
 from organization_manager import get_user_role_from_org
 from matter_actions import handle_pin_matter, handle_archive_matter, handle_delete_matter
 
+st.markdown(
+    """
+    <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-197JT7ZFHD"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
 
+    gtag('config', 'G-197JT7ZFHD');
+    </script>
+    </head>
+    """,
+    unsafe_allow_html=True
+)
 def get_time_ago(dt: datetime) -> str:
     """Helper to show relative time."""
     if not dt:

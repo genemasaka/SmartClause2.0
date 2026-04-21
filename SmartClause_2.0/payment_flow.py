@@ -33,6 +33,12 @@ class PaymentFlowManager:
         self.db = db_manager
         self.mpesa = mpesa_handler or MpesaHandler()
         self.subscription_mgr = SubscriptionManager(db_manager)
+        self.one_time_prices = {
+            "Agreement": 1500,
+            "Affidavit": 1000,
+            "Will": 750,
+            "Power of Attorney": 1200,
+        }
     
     
     def initiate_organization_purchase(self, user_id: str, organization_id: str, tier: str, seats: int, phone_number: str) -> Dict[str, Any]:
@@ -142,7 +148,7 @@ class PaymentFlowManager:
     def verify_and_process_payment(
         self, 
         checkout_request_id: str, 
-        user_id: str,
+        user_id: Optional[str],
         max_attempts: int = 6,
         delay: int = 5
     ) -> Dict[str, Any]:
@@ -260,6 +266,127 @@ class PaymentFlowManager:
                 "message": "An error occurred during verification. Please try again."
             }
 
+    def initiate_one_time_purchase(
+        self,
+        document_type: str,
+        phone_number: str,
+        email: str = "",
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Initiate one-time guest document payment via M-Pesa."""
+        try:
+            amount = self.one_time_prices.get(document_type)
+            if amount is None:
+                return {"success": False, "message": "Unsupported document type for one-time checkout."}
+
+            phone_hash = self.mpesa.encryptor.hash_data(phone_number)
+            response = self.mpesa.initiate_stk_push(
+                phone_number=phone_number,
+                amount=amount,
+                transaction_desc=f"SmartClause {document_type}",
+                account_reference=f"OT_{document_type[:3].upper()}"
+            )
+
+            if response.get("ResponseCode") != "0":
+                return {
+                    "success": False,
+                    "message": response.get("errorMessage", "Payment initiation failed"),
+                }
+
+            checkout_request_id = response.get("CheckoutRequestID")
+            tx = self.db.create_payment_transaction(
+                user_id=user_id,
+                amount=amount,
+                transaction_type="credit_purchase",
+                checkout_request_id=checkout_request_id,
+                phone_number_hash=phone_hash,
+                credits_purchased=0,
+                metadata={
+                    "payment_mode": "one_time_document",
+                    "document_type": document_type,
+                    "guest_email": email,
+                },
+            )
+            if not tx:
+                logger.warning(
+                    "One-time payment transaction could not be persisted "
+                    f"(likely user_id constraint). Continuing with checkout_id={checkout_request_id}."
+                )
+
+            return {
+                "success": True,
+                "checkout_request_id": checkout_request_id,
+                "amount": amount,
+                "message": "Payment request sent. Please check your phone.",
+            }
+        except Exception as e:
+            logger.error(f"Error initiating one-time payment: {e}", exc_info=True)
+            return {"success": False, "message": "An error occurred. Please try again."}
+
+    def verify_one_time_payment(
+        self,
+        checkout_request_id: str,
+        max_attempts: int = 18,
+        delay: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Verify one-time guest payment without requiring a payment_transactions row.
+        Uses callback table first, then Safaricom query API fallback.
+        """
+        try:
+            attempts = 0
+            while attempts < max_attempts:
+                callback = self.db.get_mpesa_callback(checkout_request_id)
+                if callback:
+                    status = callback.get("status")
+                    result_code = str(callback.get("result_code", ""))
+                    if status == "success" or result_code == "0":
+                        receipt = callback.get("mpesa_receipt_number", "")
+                        # Best-effort update only; may no-op if tx row doesn't exist.
+                        self.db.update_payment_status(checkout_request_id, "completed", receipt)
+                        return {
+                            "success": True,
+                            "message": "Payment verified. Download unlocked.",
+                            "receipt_number": receipt,
+                        }
+                    if status == "failed" or result_code in ["1032", "1037", "1"]:
+                        self.db.update_payment_status(checkout_request_id, "failed")
+                        return {
+                            "success": False,
+                            "message": "Payment was cancelled or failed. Please try again.",
+                        }
+
+                response = self.mpesa.query_stk_push(checkout_request_id)
+                result_code = str(response.get("ResultCode", ""))
+                if result_code == "0":
+                    receipt = response.get("MpesaReceiptNumber", "")
+                    self.db.update_payment_status(checkout_request_id, "completed", receipt)
+                    return {
+                        "success": True,
+                        "message": "Payment verified. Download unlocked.",
+                        "receipt_number": receipt,
+                    }
+                if result_code in ["1032", "1037", "1"]:
+                    self.db.update_payment_status(checkout_request_id, "failed")
+                    return {
+                        "success": False,
+                        "message": "Payment was cancelled or failed. Please try again.",
+                    }
+
+                time.sleep(delay)
+                attempts += 1
+
+            return {
+                "success": False,
+                "message": "Still waiting for payment confirmation. Click Verify again after approving the STK prompt.",
+            }
+        except Exception as e:
+            logger.error(f"Error verifying one-time payment: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": "An error occurred during verification. Please try again.",
+            }
+
     def _finalize_payment(self, transaction: Dict[str, Any], user_id: str, receipt_number: str) -> Dict[str, Any]:
         """
         Finalize a successful payment by updating subscriptions or credits.
@@ -304,6 +431,13 @@ class PaymentFlowManager:
 
             elif transaction_type == "credit_purchase":
                 credits = transaction.get("credits_purchased") or 0
+                metadata = transaction.get("metadata") or {}
+                if metadata.get("payment_mode") == "one_time_document":
+                    return {
+                        "success": True,
+                        "message": "Payment successful. Your document download is now unlocked.",
+                        "one_time_document": True,
+                    }
                 
                 # Update user's credit balance
                 updated_sub = self.db.update_subscription_credits(user_id, credits)
