@@ -240,9 +240,6 @@ def render_pricing_page():
                     <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
                         ✅ Admin Dashboard
                     </div>
-                    <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
-                        ✅ Custom Templates
-                    </div>
                     <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 20px;'>
                         ✅ Priority Support
                     </div>
@@ -295,12 +292,6 @@ def render_pricing_page():
                     </div>
                     <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
                         ✅ Admin Dashboard
-                    </div>
-                    <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
-                        ✅ SSO Integration
-                    </div>
-                    <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
-                        ✅ API Access
                     </div>
                     <div style='font-size: 14px; color: #FFFFFF; margin-bottom: 12px;'>
                         ✅ Dedicated Support

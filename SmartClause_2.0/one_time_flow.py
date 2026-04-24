@@ -146,53 +146,20 @@ def render_one_time_flow() -> None:
         unsafe_allow_html=True,
     )
 
+    import os
+    css_path = os.path.join(os.path.dirname(__file__), "styles.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
     st.markdown(
         """
         <style>
-        .ot-shell {
-            background: var(--sc-bg);
-        }
-        .ot-shell .sc-main-header {
-            margin-bottom: 22px !important;
-        }
-        .ot-shell .sc-header-left {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .ot-shell .sc-page-title {
-            font-size: 34px !important;
-            line-height: 1.1;
-            margin: 0 !important;
-        }
-        .ot-section {
-            background: var(--sc-surface);
-            border: 1px solid var(--sc-border);
-            border-radius: var(--sc-radius);
-            padding: 20px 24px;
-            margin-bottom: 16px;
-        }
         .ot-muted {
             color: var(--sc-text-muted);
             margin: 0;
-            font-size: 18px;
+            font-size: 16px;
             line-height: 1.35;
-        }
-        .ot-link {
-            display: inline-block;
-            margin-top: 10px;
-            color: var(--sc-accent) !important;
-            text-decoration: none;
-            font-size: 13px;
-        }
-        .ot-link:hover {
-            color: var(--sc-accent-hover) !important;
-            text-decoration: underline;
-        }
-        .ot-label {
-            color: var(--sc-text);
-            font-weight: 600;
-            margin-bottom: 8px;
         }
         .ot-price {
             background: rgba(75, 158, 255, 0.12);
@@ -215,7 +182,7 @@ def render_one_time_flow() -> None:
             font-size: 17px;
             font-weight: 700;
             color: var(--sc-text);
-            margin: 0;
+            margin: 0 0 16px 0;
         }
         .ot-preview {
             user-select: none;
@@ -225,6 +192,7 @@ def render_one_time_flow() -> None:
             padding: 14px;
             background: #141821;
             white-space: pre-wrap;
+            color: var(--sc-text);
         }
         .ot-preview * {
             user-select: none;
@@ -235,7 +203,7 @@ def render_one_time_flow() -> None:
             max-height: 420px;
             overflow: hidden;
             position: relative;
-            filter: blur(0.8px);
+            filter: blur(2px);
             opacity: 0.96;
         }
         .ot-preview-gated::after {
@@ -247,48 +215,13 @@ def render_one_time_flow() -> None:
             height: 70px;
             background: linear-gradient(to bottom, rgba(20,24,33,0), rgba(20,24,33,1));
         }
-        div[data-testid="stButton"] > button,
-        button[kind="primary"],
-        button[kind="secondary"],
-        div[data-testid="stLinkButton"] > a {
-            border-radius: var(--sc-radius-sm) !important;
-            font-weight: 600 !important;
-            border: 1px solid var(--sc-accent) !important;
-            background: var(--sc-accent) !important;
-            color: white !important;
-            box-shadow: none !important;
-        }
-        div[data-testid="stButton"] > button:hover,
-        button[kind="primary"]:hover,
-        button[kind="secondary"]:hover,
-        div[data-testid="stLinkButton"] > a:hover {
-            border-color: var(--sc-accent-hover) !important;
-            background: var(--sc-accent-hover) !important;
-            color: white !important;
-        }
-        div[data-testid="stButton"] > button[kind="secondary"],
-        div[data-testid="stLinkButton"] > a[kind="secondary"] {
-            background: rgba(255, 255, 255, 0.07) !important;
-            border: 1px solid var(--sc-border) !important;
-            color: var(--sc-text) !important;
-        }
-        div[data-testid="stButton"] > button[kind="secondary"]:hover,
-        div[data-testid="stLinkButton"] > a[kind="secondary"]:hover {
-            background: rgba(255, 255, 255, 0.13) !important;
-            border-color: #3D4350 !important;
-        }
         .stTextInput input,
         .stTextArea textarea,
         .stSelectbox div[data-baseweb="select"] > div {
             border-radius: var(--sc-radius-sm) !important;
             border-color: var(--sc-border) !important;
-            background: #161A22 !important;
-        }
-        .stAlert,
-        .element-container .stMarkdown > div:has(.ot-preview),
-        .ot-section,
-        .ot-preview {
-            border-radius: var(--sc-radius-sm) !important;
+            background: #1A1D24 !important;
+            color: var(--sc-text) !important;
         }
         </style>
         """,
@@ -297,12 +230,10 @@ def render_one_time_flow() -> None:
 
     st.markdown(
         f"""
-        <div class="ot-shell">
-            <div class="sc-main-header">
-                <div class="sc-header-left">
-                    <div class="sc-page-title">One-Time Legal Document</div>
-                    <p class="ot-muted">Generate quickly, pay via M-Pesa, then download your DOCX.</p>
-                </div>
+        <div class="sc-main-header">
+            <div class="sc-header-left">
+                <div class="sc-page-title" style="font-size: 34px !important;">One-Time Legal Document</div>
+                <p class="ot-muted">Generate quickly, pay via M-Pesa, then download your DOCX.</p>
             </div>
         </div>
         """,
@@ -314,9 +245,7 @@ def render_one_time_flow() -> None:
         type="secondary",
         use_container_width=False,
     )
-    st.markdown('<div class="ot-shell">', unsafe_allow_html=True)
-
-    st.markdown('<div class="ot-section">', unsafe_allow_html=True)
+    st.markdown('<div class="panel" style="margin-bottom: 16px;">', unsafe_allow_html=True)
     current_price = ONE_TIME_PRICES.get(st.session_state.get("ot_doc_type", "Agreement"), 0)
     st.markdown(f"<div class='ot-price-row'><div class='ot-price'>Price: KES {current_price:,}</div></div>", unsafe_allow_html=True)
     col1, col2 = st.columns([1.3, 1])
@@ -372,7 +301,7 @@ def render_one_time_flow() -> None:
             Analytics().track_event("one_time_generation_complete", {"document_type": st.session_state["ot_doc_type"]})
             st.success("Preview generated.")
 
-    st.markdown('<div class="ot-section">', unsafe_allow_html=True)
+    st.markdown('<div class="panel" style="margin-bottom: 16px;">', unsafe_allow_html=True)
     st.markdown("<p class='ot-subtitle'>Preview (Server-Gated)</p>", unsafe_allow_html=True)
     preview_html = _build_gated_html_preview(st.session_state["ot_generated_html"])
     st.markdown(
@@ -387,7 +316,7 @@ def render_one_time_flow() -> None:
     st.caption("Full text remains locked until payment verification succeeds.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="ot-section">', unsafe_allow_html=True)
+    st.markdown('<div class="panel" style="margin-bottom: 16px;">', unsafe_allow_html=True)
     st.markdown("<p class='ot-subtitle'>Pay and Unlock Download</p>", unsafe_allow_html=True)
     pay_col, verify_col = st.columns(2)
     with pay_col:
