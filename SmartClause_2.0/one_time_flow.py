@@ -1,5 +1,7 @@
 import os
 import tempfile
+import re
+import base64
 from copy import deepcopy
 from typing import Dict, Any
 
@@ -66,6 +68,25 @@ def _get_partial_preview(html: str) -> str:
     return text[:1200] + ("..." if len(text) > 1200 else "")
 
 
+def _clean_generated_html(html: str) -> str:
+    """Strip leading non-HTML artifacts the model may emit (markdown fences, ---, etc.)."""
+    # Remove leading/trailing whitespace
+    cleaned = html.strip()
+    # Strip markdown code fences (```html ... ``` or just ```)
+    cleaned = re.sub(r'^```[a-zA-Z]*\n?', '', cleaned)
+    cleaned = re.sub(r'\n?```\s*$', '', cleaned)
+    # Strip leading markdown horizontal rules (--- or ***) before the first HTML tag
+    cleaned = re.sub(r'^[-*_]{3,}\s*', '', cleaned)
+    # Strip any remaining leading text before the first HTML tag
+    first_tag = cleaned.find('<')
+    if first_tag > 0:
+        # Only strip if the leading content looks like non-HTML noise (no meaningful prose)
+        leading = cleaned[:first_tag].strip()
+        if len(leading) < 50 and not any(c.isalpha() for c in leading):
+            cleaned = cleaned[first_tag:]
+    return cleaned
+
+
 def _sanitize_preview_html(html: str) -> str:
     """Strip scripts/event handlers before rendering preview."""
     soup = BeautifulSoup(html or "", "html.parser")
@@ -129,6 +150,19 @@ def render_one_time_flow() -> None:
     _init_state()
     Analytics().track_page_visit("OneTimeDocument")
 
+    # Load logo for the header
+    logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+    logo_base64 = ""
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as f:
+            logo_base64 = base64.b64encode(f.read()).decode()
+    else:
+        # Try fallback to sidebar_logo
+        logo_path = os.path.join(os.path.dirname(__file__), "assets", "sidebar_logo.png")
+        if os.path.exists(logo_path):
+            with open(logo_path, "rb") as f:
+                logo_base64 = base64.b64encode(f.read()).decode()
+
     st.markdown(
         """
         <head>
@@ -146,7 +180,6 @@ def render_one_time_flow() -> None:
         unsafe_allow_html=True,
     )
 
-    import os
     css_path = os.path.join(os.path.dirname(__file__), "styles.css")
     if os.path.exists(css_path):
         with open(css_path, "r", encoding="utf-8") as f:
@@ -198,13 +231,12 @@ def render_one_time_flow() -> None:
             user-select: none;
             -webkit-user-select: none;
             pointer-events: none;
+            color: #FFFFFF !important;
         }
         .ot-preview-gated {
             max-height: 420px;
             overflow: hidden;
             position: relative;
-            filter: blur(2px);
-            opacity: 0.96;
         }
         .ot-preview-gated::after {
             content: "";
@@ -212,7 +244,7 @@ def render_one_time_flow() -> None:
             left: 0;
             right: 0;
             bottom: 0;
-            height: 70px;
+            height: 120px;
             background: linear-gradient(to bottom, rgba(20,24,33,0), rgba(20,24,33,1));
         }
         .stTextInput input,
@@ -221,7 +253,15 @@ def render_one_time_flow() -> None:
             border-radius: var(--sc-radius-sm) !important;
             border-color: var(--sc-border) !important;
             background: #1A1D24 !important;
-            color: var(--sc-text) !important;
+            color: #FFFFFF !important;
+        }
+        .stTextInput input::placeholder,
+        .stTextArea textarea::placeholder {
+            color: #9BA1B0 !important;
+        }
+        .stSelectbox div[data-baseweb="select"] span,
+        .stSelectbox div[data-baseweb="select"] div {
+            color: #FFFFFF !important;
         }
         </style>
         """,
@@ -230,9 +270,10 @@ def render_one_time_flow() -> None:
 
     st.markdown(
         f"""
-        <div class="sc-main-header">
+        <div class="sc-main-header" style="margin-top: 0px; margin-bottom: 30px;">
             <div class="sc-header-left">
-                <div class="sc-page-title" style="font-size: 34px !important;">One-Time Legal Document</div>
+                {f'<img src="data:image/png;base64,{logo_base64}" style="width: 200px; margin-bottom: 40px; display: block;">' if logo_base64 else ''}
+                <h1 style="font-size: 34px !important; color: #FFFFFF !important; margin: 0 0 10px 0; font-weight: 700; line-height: 1.1; opacity: 1 !important;">One-Time Legal Document</h1>
                 <p class="ot-muted">Generate quickly, pay via M-Pesa, then download your DOCX.</p>
             </div>
         </div>
@@ -293,7 +334,7 @@ def render_one_time_flow() -> None:
                             ),
                             unsafe_allow_html=True,
                         )
-                st.session_state["ot_generated_html"] = content
+                st.session_state["ot_generated_html"] = _clean_generated_html(content)
                 st.session_state["ot_payment_verified"] = False
                 st.session_state["ot_checkout_request_id"] = ""
             progress_placeholder.empty()
